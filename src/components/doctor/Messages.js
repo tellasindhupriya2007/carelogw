@@ -41,15 +41,23 @@ export default function DoctorMessages() {
         p.name?.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
+    const [isMobile, setIsMobile] = useState(window.innerWidth <= 1100);
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth <= 1100);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    const showSidebar = !isMobile || (isMobile && !activePatient);
+    const showChat = !isMobile || (isMobile && !!activePatient);
+
     return (
         <DoctorShell alertCount={alertCount}>
-            <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
+            <div className="chat-layout-container">
                 
                 {/* Patient Selector Sidebar */}
-                <div style={{ 
-                    width: '300px', borderRight: `1px solid ${DS.outlineVariant}`, 
-                    display: 'flex', flexDirection: 'column', backgroundColor: DS.surfaceLow 
-                }}>
+                {showSidebar && (
+                    <div className="chat-sidebar">
                     <div style={{ padding: '24px 20px 16px' }}>
                         <h2 style={{ fontSize: '18px', fontWeight: '900', color: DS.textPrimary, margin: '0 0 16px 0' }}>Messages</h2>
                         <div style={{ position: 'relative' }}>
@@ -110,15 +118,19 @@ export default function DoctorMessages() {
                         )}
                     </div>
                 </div>
+                )}
 
                 {/* Chat Interface */}
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                {showChat && (
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
+
                     {activePatient ? (
                         <ChatInterface 
                             key={activePatient.id}
                             currentUser={user} 
                             patientId={activePatient.id} 
                             userRole={role || "doctor"} 
+                            onExitChat={() => setActivePatient(null)}
                         />
                     ) : (
                         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: DS.surface }}>
@@ -137,7 +149,8 @@ export default function DoctorMessages() {
                             </div>
                         </div>
                     )}
-                </div>
+                    </div>
+                )}
             </div>
         </DoctorShell>
     );

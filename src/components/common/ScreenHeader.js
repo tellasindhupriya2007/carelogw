@@ -127,8 +127,8 @@ export default function ScreenHeader({ title, showBack, rightIcon, onBack, onMen
             width: '100%',
             boxSizing: 'border-box'
         }}>
-            {/* Left Box (Fixed Width for Balance) */}
-            <div style={{ width: '80px', display: 'flex', alignItems: 'center', justifyContent: 'flex-start' }}>
+            {/* Left Box */}
+            <div style={{ minWidth: '40px', display: 'flex', alignItems: 'center', justifyContent: 'flex-start' }}>
                 {showBack && (
                     <button 
                         onClick={handleBack}
@@ -172,19 +172,18 @@ export default function ScreenHeader({ title, showBack, rightIcon, onBack, onMen
             <div style={{ flex: 1, textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 0 }}>
                 <h1 style={{ 
                     margin: 0, 
-                    fontSize: '18px', 
-                    fontWeight: '600', 
+                    fontSize: '17px', 
+                    fontWeight: '800', 
                     color: colors.textPrimary,
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
-                    textOverflow: 'ellipsis'
-                }}>
-                    {title}
-                </h1>
+                    textOverflow: 'ellipsis',
+                    letterSpacing: '-0.3px'
+                }}> {title} </h1>
             </div>
 
-            {/* Right Box (Fixed Width for Balance) */}
-            <div style={{ width: '80px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+            {/* Right Box */}
+            <div style={{ minWidth: '40px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
                 {rightIcon}
                 {ProfileAvatar}
             </div>

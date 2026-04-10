@@ -371,19 +371,19 @@ export default function WeeklyReport() {
             />
 
             {/* Week Selector */}
-            <div style={{ backgroundColor: colors.white, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${colors.border}` }}>
-                <button onClick={handlePrevWeek} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px' }}>
+            <div className="week-selector">
+                <button onClick={handlePrevWeek} className="nav-btn">
                     <ChevronLeft size={24} color={colors.primaryBlue} />
                 </button>
-                <span style={{ fontSize: '16px', fontWeight: '600', color: colors.textPrimary }}>
+                <span className="week-label">
                     {getDisplayWeek(weekStart)}
                 </span>
-                <button onClick={handleNextWeek} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px' }}>
+                <button onClick={handleNextWeek} className="nav-btn">
                     <ChevronRight size={24} color={colors.primaryBlue} />
                 </button>
             </div>
 
-            <div style={{ padding: spacing.pagePadding, flex: 1, paddingBottom: '90px' }}>
+            <div className="main-content scroll-y report-container">
                 {error ? (
                     <ErrorCard message={error} />
                 ) : loading || !stats ? (
@@ -432,31 +432,33 @@ export default function WeeklyReport() {
                         {/* Section 3 */}
                         <Card>
                             <SectionHeading title="Vitals Summary" />
-                            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                                <thead>
-                                    <tr style={{ borderBottom: `1px solid ${colors.border}` }}>
-                                        <th style={{ padding: '8px 0', fontSize: '12px', color: colors.textSecondary, fontWeight: '500' }}>Parameter</th>
-                                        <th style={{ padding: '8px 0', fontSize: '12px', color: colors.textSecondary, fontWeight: '500' }}>Avg</th>
-                                        <th style={{ padding: '8px 0', fontSize: '12px', color: colors.textSecondary, fontWeight: '500' }}>High</th>
-                                        <th style={{ padding: '8px 0', fontSize: '12px', color: colors.textSecondary, fontWeight: '500' }}>Low</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {[
-                                        { label: 'BP Sys', data: stats.vStats.bpSys, abmLim: 140 },
-                                        { label: 'BP Dia', data: stats.vStats.bpDia, abmLim: 90 },
-                                        { label: 'HR (bpm)', data: stats.vStats.hr, abmLim: 100 },
-                                        { label: 'Temp (F)', data: stats.vStats.temp, abmLim: 99 }
-                                    ].map((r, i) => (
-                                        <tr key={i} style={{ borderBottom: `1px solid ${colors.background}` }}>
-                                            <td style={{ padding: '8px 0', fontSize: '14px', fontWeight: '500' }}>{r.label}</td>
-                                            <td style={{ padding: '8px 0', fontSize: '14px' }}>{r.data.avg || '-'}</td>
-                                            <td style={{ padding: '8px 0', fontSize: '14px', color: r.data.max > r.abmLim ? colors.alertRed : colors.textPrimary, fontWeight: r.data.max > r.abmLim ? '700' : '400' }}>{r.data.max || '-'}</td>
-                                            <td style={{ padding: '8px 0', fontSize: '14px' }}>{r.data.min || '-'}</td>
+                            <div className="table-wrapper">
+                                <table className="clinical-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Parameter</th>
+                                            <th>Avg</th>
+                                            <th>High</th>
+                                            <th>Low</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody>
+                                        {[
+                                            { label: 'BP Sys', data: stats.vStats.bpSys, abmLim: 140 },
+                                            { label: 'BP Dia', data: stats.vStats.bpDia, abmLim: 90 },
+                                            { label: 'HR (bpm)', data: stats.vStats.hr, abmLim: 100 },
+                                            { label: 'Temp (F)', data: stats.vStats.temp, abmLim: 99 }
+                                        ].map((r, i) => (
+                                            <tr key={i}>
+                                                <td className="param-label">{r.label}</td>
+                                                <td>{r.data.avg || '-'}</td>
+                                                <td className={r.data.max > r.abmLim ? 'abnormal' : ''}>{r.data.max || '-'}</td>
+                                                <td>{r.data.min || '-'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         </Card>
 
                         {/* Section 4 */}
@@ -515,7 +517,7 @@ export default function WeeklyReport() {
                         {/* Section 7 */}
                         <Card style={{ marginBottom: '16px' }}>
                             <SectionHeading title="Overall Summary" />
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                            <div className="overall-summary-grid">
                                 <div>
                                     <div style={{ fontSize: '12px', color: colors.textSecondary }}>Medicines</div>
                                     <div style={{ fontSize: '18px', fontWeight: '600' }}>{stats.completedMeds}/{stats.totalMeds}</div>
@@ -550,8 +552,8 @@ export default function WeeklyReport() {
             </div>
 
             {/* Sticky Bottom Area */}
-            <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, backgroundColor: colors.white, padding: '16px', borderTop: `1px solid ${colors.border}`, zIndex: 10, display: 'flex', justifyContent: 'center' }}>
-                <div style={{ width: '100%', maxWidth: '430px' }}>
+            <div className="report-footer">
+                <div className="footer-content">
                     <PrimaryButton label="Download PDF Report" onClick={generatePDF} isLoading={generatingPDF || loading} disabled={generatingPDF || loading} />
                 </div>
             </div>

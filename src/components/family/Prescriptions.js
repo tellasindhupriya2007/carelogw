@@ -1,22 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthContext } from '../../context/AuthContext';
-import { collection, query, where, getDocs, orderBy, limit, addDoc, serverTimestamp, doc, updateDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../../firebase/config';
+import { collection, query, where, getDocs, limit, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../firebase/config';
 import ScreenHeader from '../../components/common/ScreenHeader';
-import Card from '../common/Card';
 import FamilyBottomNav from '../common/FamilyBottomNav';
 import SkeletonCard from '../common/SkeletonCard';
-import PrimaryButton from '../common/PrimaryButton';
 import { colors } from '../../styles/colors';
 import { spacing } from '../../styles/spacing';
-import { Pill, UploadCloud, Loader2 } from 'lucide-react';
+import { Pill, UploadCloud, Loader2, ChevronRight } from 'lucide-react';
 
 export default function FamilyPrescriptions() {
     const navigate = useNavigate();
-    const { patientId, user } = useAuthContext();
+    const { patientId } = useAuthContext();
     const [medicines, setMedicines] = useState([]);
+    const [history, setHistory] = useState([]);
     const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
     const [toast, setToast] = useState(null);
@@ -30,64 +28,78 @@ export default function FamilyPrescriptions() {
         const fetchMeds = async () => {
             if (!patientId) return;
             try {
-                // Read from prescriptions collection properly
-                const q = query(collection(db, 'prescriptions'), where('patientId', '==', patientId), limit(10));
+                const q = query(collection(db, 'prescriptions'), where('patientId', '==', patientId), limit(20));
                 const snap = await getDocs(q);
                 if (!snap.empty) {
-                    // Sort client-side by uploadedAt desc, pick most recent
-                    const sorted = snap.docs
-                        .map(d => ({ id: d.id, ...d.data() }))
+                    const allData = snap.docs.map(d => ({ id: d.id, ...d.data() }))
                         .sort((a, b) => {
-                            const ta = a.uploadedAt?.toDate?.() || new Date(a.uploadedAt || 0);
-                            const tb = b.uploadedAt?.toDate?.() || new Date(b.uploadedAt || 0);
+                            const ta = a.uploadedAt?.toMillis ? a.uploadedAt.toMillis() : new Date(a.uploadedAt || 0).getTime();
+                            const tb = b.uploadedAt?.toMillis ? b.uploadedAt.toMillis() : new Date(b.uploadedAt || 0).getTime();
                             return tb - ta;
                         });
-                    setMedicines(sorted[0]?.medicines || []);
+                    setHistory(allData);
+                    setMedicines(allData[0]?.medicines || []);
                 } else {
-                    // Fallback to carePlans logic
                     const planSnap = await getDocs(query(collection(db, 'carePlans'), where('__name__', '==', patientId)));
                     if (!planSnap.empty) {
                         setMedicines(planSnap.docs[0].data().medicines || []);
                     }
                 }
             } catch (err) {
-                console.error(err);
+                console.error("[Prescr] Load error:", err);
             }
             setLoading(false);
         };
         fetchMeds();
     }, [patientId]);
 
+    const compressAndUpload = async (file) => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = (event) => {
+                const img = new Image();
+                img.src = event.target.result;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const MAX_WIDTH = 1000;
+                    const scale = MAX_WIDTH / img.width;
+                    canvas.width = MAX_WIDTH;
+                    canvas.height = img.height * scale;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    // High quality but stays under 1MB Firestore limit
+                    const base64 = canvas.toDataURL('image/jpeg', 0.7);
+                    resolve(base64);
+                };
+                img.onerror = reject;
+            };
+            reader.onerror = reject;
+        });
+    };
+
     const handleUpload = async (e) => {
         const file = e.target.files[0];
         if (!file || !patientId) return;
-
         setUploading(true);
         try {
-            // Upload to storage
-            const fileRef = ref(storage, `prescriptions/${patientId}_${Date.now()}_${file.name}`);
-            await uploadBytes(fileRef, file);
-            const photoUrl = await getDownloadURL(fileRef);
+            // Compress locally - works without Firebase Storage!
+            const base64Image = await compressAndUpload(file);
 
-            // Write to prescriptions collection properly
             await addDoc(collection(db, 'prescriptions'), {
                 patientId,
-                photoUrl,
+                photoUrl: base64Image, // Save compressed image directly
                 uploadedAt: serverTimestamp(),
                 uploadedBy: 'Family',
-                medicines: medicines // Propagate current active list along with it
+                medicines: medicines
             });
 
-            // Update carePlans as well just to ensure caretaker is synced natively
-            await updateDoc(doc(db, 'carePlans', patientId), {
-                lastPrescriptionImg: photoUrl,
-                updatedAt: serverTimestamp()
-            });
-
-            showToast("Prescription uploaded successfully!", "success");
+            showToast("Prescription saved successfully!", "success");
+            // Refresh history
+            setHistory(prev => [{ photoUrl: base64Image, uploadedAt: { toDate: () => new Date() }, medicines }, ...prev]);
         } catch (error) {
             console.error(error);
-            showToast("Failed to upload prescription.", "error");
+            showToast("Upload failed. Try a smaller photo.", "error");
         }
         setUploading(false);
     };
@@ -99,8 +111,8 @@ export default function FamilyPrescriptions() {
                     position: 'fixed', top: '20px', left: '50%', transform: 'translateX(-50%)',
                     backgroundColor: toast.type === 'success' ? colors.successGreen : colors.alertRed,
                     color: toast.type === 'success' ? colors.primaryGreen : colors.white,
-                    padding: '12px 24px', borderRadius: spacing.borderRadius.badge, fontWeight: '600',
-                    boxShadow: spacing.shadows.card, zIndex: 100, animation: 'slideDown 0.3s ease-out'
+                    padding: '12px 24px', borderRadius: '12px', fontWeight: '600',
+                    boxShadow: spacing.shadows.card, zIndex: 1100
                 }}>
                     {toast.message}
                 </div>
@@ -108,7 +120,7 @@ export default function FamilyPrescriptions() {
 
             <ScreenHeader title="Active Prescriptions" showBack onBack={() => navigate(-1)} />
 
-            <div className="main-content scroll-y" style={{ padding: spacing.pagePadding, flex: 1, paddingBottom: '90px' }}>
+            <div className="main-content scroll-y" style={{ padding: spacing.pagePadding, flex: 1, paddingBottom: '100px' }}>
                 <div style={{ marginBottom: '24px' }}>
                     <div style={{ position: 'relative' }}>
                         <input
@@ -119,18 +131,15 @@ export default function FamilyPrescriptions() {
                             disabled={uploading}
                         />
                         <button style={{
-                            width: '100%', height: '52px', backgroundColor: colors.lightBlue,
-                            border: `1px dashed ${colors.primaryBlue}`, borderRadius: spacing.borderRadius.card,
-                            color: colors.primaryBlue, fontSize: '14px', fontWeight: '600',
+                            width: '100%', height: '52px', backgroundColor: '#EFF6FF',
+                            border: `1px dashed ${colors.primaryBlue}`, borderRadius: '16px',
+                            color: colors.primaryBlue, fontSize: '14px', fontWeight: '700',
                             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
                         }}>
                             {uploading ? <Loader2 size={20} className="spinner" /> : <UploadCloud size={20} />}
-                            {uploading ? "Uploading..." : "Upload New Prescription"}
+                            {uploading ? "Saving Locally..." : "Upload New Prescription"}
                         </button>
                     </div>
-                    <span style={{ fontSize: '12px', color: colors.textSecondary, marginTop: '8px', display: 'block', textAlign: 'center' }}>
-                        Uploading a photo updates the isolated prescription records.
-                    </span>
                 </div>
 
                 {loading ? (
@@ -138,30 +147,56 @@ export default function FamilyPrescriptions() {
                         <SkeletonCard /><SkeletonCard />
                     </div>
                 ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                        <h3 style={{ fontSize: '16px', fontWeight: '600', color: colors.textPrimary, marginBottom: '4px' }}>Current Medicines</h3>
-                        {(medicines.length === 0 ? [
-                            { name: "Amlodipine", dosage: "5mg", frequency: "1x Daily", scheduledTimes: ["08:00 AM"] }, 
-                            { name: "Metformin", dosage: "500mg", frequency: "2x Daily", scheduledTimes: ["08:00 AM", "08:00 PM"] }
-                        ] : medicines).map((m, i) => (
-                                <Card key={i} style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px' }}>
-                                    <div style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: colors.lightBlue, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                                        <Pill size={24} color={colors.primaryBlue} />
+                    <>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            <h3 className="section-title">Current Medications</h3>
+                            {(medicines.length === 0 ? [
+                                { name: "Amoxicillin", dosage: "500mg", frequency: "3 times daily", times: ["08:00"] }, 
+                                { name: "Paracetamol", dosage: "1g", frequency: "As needed", times: ["12:00"] }
+                            ] : medicines).map((m, i) => (
+                                <div key={i} className="medicine-pill-card">
+                                    <div className="pill-icon-box">
+                                        <Pill size={22} color={colors.primaryBlue} />
                                     </div>
-                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                        <span style={{ fontSize: '16px', fontWeight: '600', color: colors.textPrimary }}>{m.name}</span>
-                                        <span style={{ fontSize: '14px', color: colors.textSecondary }}>{m.dosage} • {m.frequency}</span>
-                                        <span style={{ fontSize: '12px', color: colors.primaryBlue, marginTop: '4px' }}>Takes at {m.scheduledTimes?.[0]}</span>
+                                    <div className="med-info">
+                                        <span className="med-name">{m.name}</span>
+                                        <span className="med-meta">{m.dosage} • {m.frequency}</span>
+                                        <span className="med-timing">Next dose: {m.scheduledTimes?.[0] || m.times?.[0]}</span>
                                     </div>
-                                </Card>
-                            ))
-                        }
-                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {history.length > 0 && (
+                            <div style={{ marginTop: '32px' }}>
+                                <h3 className="section-title">Recent Activity</h3>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                    {history.map((h, i) => (
+                                        <div key={i} className="history-item-card" onClick={() => {
+                                            const win = window.open();
+                                            win.document.write(`<img src="${h.photoUrl}" style="width:100%; height:auto;" />`);
+                                        }}>
+                                            <div className="history-icon-box">
+                                                <UploadCloud size={18} color={colors.primaryBlue} />
+                                            </div>
+                                            <div className="history-info">
+                                                <span className="history-title">Prescription Archive</span>
+                                                <span className="history-time">
+                                                    {h.uploadedAt?.toDate ? h.uploadedAt.toDate().toLocaleString() : 'Just Now'}
+                                                </span>
+                                            </div>
+                                            <ChevronRight size={16} color={colors.textSecondary} />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
 
             <FamilyBottomNav />
-            <style>{`.spinner { animation: spin 1s linear infinite; } @keyframes spin { 100% { transform: rotate(360deg); } } @keyframes slideDown { from { transform: translateY(-10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }`}</style>
+            <style>{`.spinner { animation: spin 1s linear infinite; } @keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
         </div>
     );
 }

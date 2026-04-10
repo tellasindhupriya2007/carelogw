@@ -16,11 +16,9 @@ import {
     FileText, ChevronRight, Mic, Camera, Users, User, 
     Home, MessageSquare, LogOut, ShieldAlert, Activity, X, Menu, Loader2, UploadCloud
 } from 'lucide-react';
-import logo from '../../assets/logo.png';
 import { colors } from '../../styles/colors';
 import { spacing } from '../../styles/spacing';
 import { ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import axios from 'axios';
 import TaskManager from './TaskManager';
 import { generateWeeklyReport } from '../../services/reportService';
 import { createDefaultWorkflow } from '../../services/taskService';
@@ -32,12 +30,6 @@ const familySidebarItems = [
     { icon: 'Bell', label: 'Alerts', path: '/family/alerts' },
     { icon: 'MessageSquare', label: 'Messages', path: '/family/messages' }
 ];
-
-const Icons = { 
-    Bell, Pill, HeartPulse, Smile, AlertTriangle, Info, 
-    FileText, ChevronRight, Mic, Camera, Users, User, 
-    Home, MessageSquare, LogOut, ShieldAlert, Activity, X 
-};
 
 export default function FamilyDashboard() {
     const navigate = useNavigate();
@@ -54,7 +46,6 @@ export default function FamilyDashboard() {
     const [error, setError] = useState(null);
     const [creating, setCreating] = useState(false);
     const [previewUrl, setPreviewUrl] = useState(null);
-
 
     // 1. Fetch patient
     useEffect(() => {
@@ -160,7 +151,7 @@ export default function FamilyDashboard() {
         let loadedObservations = [];
 
         const unsubTasks = subscribeToTasks(patientId, (allTasks) => {
-            loadedTasks = allTasks;
+            loadedTasks = allTasks || [];
             updateLocalData();
         });
 
@@ -200,7 +191,6 @@ export default function FamilyDashboard() {
         return () => { unsubAlerts(); unsubTasks(); unsubLogs(); unsubVitals(); };
     }, [patientId]);
 
-
     const getScoreColor = (score) => {
         if (score >= 8) return colors.primaryGreen;
         if (score >= 5) return colors.alertYellow;
@@ -210,7 +200,7 @@ export default function FamilyDashboard() {
     const scoreData = data ? [
         { name: 'Score', value: data.careScore || 0, color: getScoreColor(data.careScore) },
         { name: 'Remaining', value: Math.max(0, 10 - (data.careScore || 0)), color: colors.border }
-    ] : [];
+    ] : [{ name: 'Empty', value: 10, color: colors.border }];
 
     const unreadAlertsCount = alerts.length;
     const hasAlertToday = alerts.length > 0;
@@ -227,43 +217,45 @@ export default function FamilyDashboard() {
         return emMap[lastObs.mood] || "--";
     };
 
+    const safeFormatTime = (dateObj) => {
+        if (!dateObj) return "--:--";
+        try {
+            const date = dateObj.toMillis ? dateObj.toDate() : new Date(dateObj);
+            if (isNaN(date.getTime())) return "--:--";
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        } catch (e) {
+            return "--:--";
+        }
+    };
+
     const timeline = (() => {
         if (!data) return [];
         const activities = [];
         data.tasks?.forEach(t => {
             if (t.status === 'Completed' && t.completedAt) {
-                activities.push({ id: t.taskId, text: `Completed: ${t.name}`, timeStr: new Date(t.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), timestamp: new Date(t.completedAt).getTime(), type: 'success', caretaker: 'Caretaker' });
+                activities.push({ id: t.taskId, text: `Completed: ${t.name}`, timeStr: safeFormatTime(t.completedAt), timestamp: t.completedAt.toMillis ? t.completedAt.toMillis() : new Date(t.completedAt).getTime(), type: 'success', caretaker: 'Caretaker' });
             }
         });
         data.observations?.forEach((obs, i) => {
-            activities.push({ id: `obs-${i}`, text: obs.isCritical ? "Critical Observation" : "Logged Observation", timeStr: new Date(obs.recordedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), timestamp: new Date(obs.recordedAt).getTime(), type: obs.isCritical ? 'alert' : 'success', caretaker: obs.caretakerName || 'Caretaker', hasVoice: obs.hasVoice, hasImage: obs.hasImage });
+            activities.push({ id: `obs-${i}`, text: obs.isCritical ? "Critical Observation" : "Logged Observation", timeStr: safeFormatTime(obs.recordedAt), timestamp: obs.recordedAt.toMillis ? obs.recordedAt.toMillis() : new Date(obs.recordedAt).getTime(), type: obs.isCritical ? 'alert' : 'success', caretaker: obs.caretakerName || 'Caretaker', hasVoice: obs.hasVoice, hasImage: obs.hasImage });
         });
         data.vitals?.forEach((v, i) => {
-            activities.push({ id: `vit-${i}`, text: v.alertTriggered ? "Abnormal Vitals" : "Vitals Recorded", timeStr: new Date(v.recordedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), timestamp: new Date(v.recordedAt).getTime(), type: v.alertTriggered ? 'alert' : 'success', caretaker: 'Caretaker' });
+            activities.push({ id: `vit-${i}`, text: v.alertTriggered ? "Abnormal Vitals" : "Vitals Recorded", timeStr: safeFormatTime(v.recordedAt), timestamp: v.recordedAt.toMillis ? v.recordedAt.toMillis() : new Date(v.recordedAt).getTime(), type: v.alertTriggered ? 'alert' : 'success', caretaker: 'Caretaker' });
         });
         return activities.sort((a, b) => b.timestamp - a.timestamp).slice(0, 5);
     })();
 
-    const sidebarItems = [
-        { icon: 'Home', label: 'Dashboard', onClick: () => setActiveTab('dashboard'), active: activeTab === 'dashboard' },
-        { icon: 'User', label: 'Patient Profile', onClick: () => setActiveTab('profile'), active: activeTab === 'profile' },
-        { icon: 'FileText', label: 'Reports', path: '/family/report' },
-        { icon: 'Pill', label: 'Prescriptions', path: '/family/prescriptions' },
-        { icon: 'Bell', label: 'Alerts', path: '/family/alerts' },
-        { icon: 'MessageSquare', label: 'Messages', path: '/family/messages' }
-    ];
-
     const renderAlertBanner = () => {
         if (hasAlertToday) {
             return (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px', width: '100%' }}>
+                <div className="mobile-alert-stack">
                     {alerts.slice(0, 2).map(alert => (
-                        <div key={alert.id} onClick={() => navigate('/family/alerts')} style={{ backgroundColor: alert.type === 'critical' ? colors.alertRed : '#F59E0B', color: colors.white, padding: '16px', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', cursor: 'pointer', boxShadow: spacing.shadows.card }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div key={alert.id} onClick={() => navigate('/family/alerts')} className="alert-banner-item" style={{ backgroundColor: alert.type === 'critical' ? colors.alertRed : '#F59E0B' }}>
+                            <div className="alert-content">
                                 <AlertTriangle size={20} color={colors.white} />
-                                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                    <span style={{ fontSize: '14px', fontWeight: '700', lineHeight: '1.3' }}>{alert.message}</span>
-                                    <span style={{ fontSize: '11px', opacity: 0.8, marginTop: '2px', textTransform: 'uppercase' }}>{alert.source || 'SYSTEM'} ALERT</span>
+                                <div className="alert-text-box">
+                                    <span className="alert-msg">{alert.message}</span>
+                                    <span className="alert-meta">{alert.source || 'SYSTEM'} ALERT</span>
                                 </div>
                             </div>
                             <ChevronRight size={20} opacity={0.6} />
@@ -273,8 +265,9 @@ export default function FamilyDashboard() {
             );
         }
         return (
-            <div style={{ backgroundColor: colors.successGreen, color: colors.primaryGreen, padding: '16px', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%', marginBottom: '16px' }}>
-                <span style={{ fontSize: '14px', fontWeight: '700' }}>All clear today</span>
+            <div className="all-clear-banner">
+                <Activity size={18} />
+                <span>All clear today</span>
             </div>
         );
     };
@@ -289,14 +282,14 @@ export default function FamilyDashboard() {
             />
             
             <div className="desktop-content" style={{ flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: colors.background }}>
-                <div style={{ backgroundColor: colors.white, borderBottom: `1px solid ${colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '64px', padding: '0 24px' }} className="mobile-only">
-                    <button onClick={() => setSidebarOpen(true)} style={{ background: 'none', border: 'none', color: colors.textPrimary, padding: '8px' }}>
+                <div className="mobile-only clinical-header">
+                    <button onClick={() => setSidebarOpen(true)} className="menu-trigger">
                         <Menu size={24} />
                     </button>
-                    <h1 style={{ fontSize: '18px', fontWeight: '900', color: colors.textPrimary, letterSpacing: '-0.3px' }}>Dashboard</h1>
-                    <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => navigate('/family/alerts')}>
-                        <Bell size={20} color={colors.textPrimary} />
-                        <span style={{ position: 'absolute', top: '-6px', right: '-6px', backgroundColor: colors.alertRed, color: 'white', fontSize: '10px', minWidth: '16px', height: '16px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900' }}>2</span>
+                    <h1 className="header-title">Care Dashboard</h1>
+                    <div className="header-actions" onClick={() => navigate('/family/alerts')}>
+                        <Bell size={20} />
+                        {unreadAlertsCount > 0 && <span className="notification-badge">{unreadAlertsCount}</span>}
                     </div>
                 </div>
 
@@ -333,23 +326,83 @@ export default function FamilyDashboard() {
                            ) : (
                                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                                     <div className="desktop-only">{renderAlertBanner()}</div>
-                                    <div style={{ display: 'flex', flexDirection: 'row', backgroundColor: colors.white, borderRadius: '16px', padding: '20px', boxShadow: spacing.shadows.card, gap: '24px', alignItems: 'stretch' }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '120px' }}>
-                                            <div style={{ position: 'relative', width: '100px', height: '100px' }}><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={scoreData} cx="50%" cy="50%" innerRadius={35} outerRadius={50} startAngle={225} endAngle={-45} stroke="none" cornerRadius={8} dataKey="value">{scoreData.map((e, index) => <Cell key={index} fill={e.color} />)}</Pie></PieChart></ResponsiveContainer><div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}><span style={{ fontSize: '24px', fontWeight: '800', color: getScoreColor(data?.careScore) }}>{data?.careScore || 0}</span></div></div>
-                                            <span style={{ fontSize: '13px', fontWeight: '600', color: colors.textSecondary, marginTop: '4px' }}>Care Score</span>
+                                    
+                                    <div className="dashboard-summary-container">
+                                        <div className="care-score-pod">
+                                            <div className="pod-chart">
+                                                <ResponsiveContainer width="100%" height="100%">
+                                                    <PieChart>
+                                                        <Pie data={scoreData} cx="50%" cy="50%" innerRadius={35} outerRadius={50} startAngle={225} endAngle={-45} stroke="none" cornerRadius={8} dataKey="value">
+                                                            {scoreData.map((e, index) => <Cell key={index} fill={e.color || '#E2E8F0'} />)}
+                                                        </Pie>
+                                                    </PieChart>
+                                                </ResponsiveContainer>
+                                                <div className="score-value" style={{ color: getScoreColor(data?.careScore) }}>{data?.careScore || 0}</div>
+                                            </div>
+                                            <span className="pod-label">Care Score</span>
                                         </div>
-                                        <div style={{ width: '1px', backgroundColor: colors.border, margin: '8px 0' }} />
-                                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><h3 style={{ fontSize: '14px', fontWeight: '800', color: colors.textPrimary, marginBottom: '12px' }}>Today's Activity</h3><div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>{timeline.length === 0 ? (<span style={{ fontSize: '13px', color: colors.textSecondary }}>No activities recorded yet.</span>) : (timeline.slice(0, 3).map((act) => (<div key={act.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}><div style={{ marginTop: '5px', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: act.type === 'alert' ? colors.alertRed : colors.primaryGreen }} /><div style={{ flex: 1, display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}><div style={{ display: 'flex', flexDirection: 'column' }}><span style={{ fontSize: '13px', fontWeight: '600', color: colors.textPrimary, lineHeight: '1.2' }}>{act.text}</span><span style={{ fontSize: '11px', color: colors.textSecondary }}>{act.caretaker} • {act.timeStr}</span></div><div style={{ display: 'flex', gap: '6px' }}>{act.hasVoice && <Mic size={14} color={colors.primaryBlue} />}{act.hasImage && <Camera size={14} color={colors.primaryBlue} />}</div></div></div>)))}</div></div>
+                                        <div className="vertical-divider" />
+                                        <div className="activity-pod">
+                                            <h3 className="pod-title">Today's Activity</h3>
+                                            <div className="timeline-mini">
+                                                {(!timeline || timeline.length === 0) ? (
+                                                    <span className="empty-msg">No activity recorded today.</span>
+                                                ) : (
+                                                    timeline.slice(0, 3).map((act, idx) => (
+                                                        <div key={idx} className="timeline-item">
+                                                            <div className={`dot ${act.type || 'success'}`} />
+                                                            <div className="timeline-content">
+                                                                <span className="timeline-text">{act.text}</span>
+                                                                <span className="timeline-time">{act.timeStr}</span>
+                                                            </div>
+                                                        </div>
+                                                    ))
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div style={{ display: 'flex', gap: '16px', width: '100%' }}>
-                                        <div style={{ flex: 1, backgroundColor: colors.white, borderRadius: '16px', padding: '16px', display: 'flex', alignItems: 'center', gap: '12px', boxShadow: spacing.shadows.card }}><div style={{ backgroundColor: colors.lightBlue, minWidth: '40px', height: '40px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Pill size={20} color={colors.primaryBlue} /></div><div style={{ display: 'flex', flexDirection: 'column' }}><span style={{ fontSize: '12px', color: colors.textSecondary, fontWeight: '700' }}>Medicines</span><span style={{ fontSize: '16px', fontWeight: '800', color: completedMeds === totalMeds && totalMeds > 0 ? colors.primaryGreen : colors.textPrimary }}>{completedMeds}/{totalMeds}</span></div></div>
-                                        <div style={{ flex: 1, backgroundColor: colors.white, borderRadius: '16px', padding: '16px', display: 'flex', alignItems: 'center', gap: '12px', boxShadow: spacing.shadows.card }}><div style={{ backgroundColor: colors.lightGreen, minWidth: '40px', height: '40px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><HeartPulse size={20} color={colors.primaryGreen} /></div><div style={{ display: 'flex', flexDirection: 'column' }}><span style={{ fontSize: '12px', color: colors.textSecondary, fontWeight: '700' }}>Vitals</span><span style={{ fontSize: '16px', fontWeight: '800', color: vitalsColor }}>{vitalsText}</span></div></div>
-                                        <div style={{ flex: 1, backgroundColor: colors.white, borderRadius: '16px', padding: '16px', display: 'flex', alignItems: 'center', gap: '12px', boxShadow: spacing.shadows.card }}><div style={{ backgroundColor: colors.lightOrange, minWidth: '40px', height: '40px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Smile size={20} color={colors.alertOrange} /></div><div style={{ display: 'flex', flexDirection: 'column' }}><span style={{ fontSize: '12px', color: colors.textSecondary, fontWeight: '700' }}>Mood</span><span style={{ fontSize: '20px', fontWeight: '800', lineHeight: 1 }}>{getMoodEmoji()}</span></div></div>
+
+                                    <div className="quick-vitals-grid">
+                                        <div className="vital-card">
+                                            <div className="icon-box med" style={{ backgroundColor: colors.lightBlue }}><Pill size={20} color={colors.primaryBlue} /></div>
+                                            <div className="card-info">
+                                                <span className="card-label">Meds</span>
+                                                <span className={`card-value ${completedMeds === totalMeds && totalMeds > 0 ? 'good' : ''}`} style={{ color: completedMeds === totalMeds && totalMeds > 0 ? colors.primaryGreen : colors.textPrimary }}>
+                                                    {completedMeds}/{totalMeds}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div className="vital-card">
+                                            <div className="icon-box heart" style={{ backgroundColor: colors.lightGreen }}><HeartPulse size={20} color={colors.primaryGreen} /></div>
+                                            <div className="card-info">
+                                                <span className="card-label">Vitals</span>
+                                                <span className={`card-value ${hasVitalsAlert ? 'bad' : 'good'}`} style={{ color: vitalsColor }}>
+                                                    {vitalsText}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div className="vital-card">
+                                            <div className="icon-box mood" style={{ backgroundColor: colors.lightOrange }}><Smile size={20} color={colors.alertOrange} /></div>
+                                            <div className="card-info">
+                                                <span className="card-label">Mood</span>
+                                                <span className="card-value emoji">{getMoodEmoji()}</span>
+                                            </div>
+                                        </div>
                                     </div>
+
                                     <TaskManager patientId={patientId} />
-                                    <div style={{ backgroundColor: colors.white, padding: '20px', borderRadius: '16px', boxShadow: spacing.shadows.card, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}><div style={{ backgroundColor: colors.lightBlue, padding: '12px', borderRadius: '12px' }}><FileText size={24} color={colors.primaryBlue} /></div><div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}><span style={{ fontSize: '16px', fontWeight: '800', color: colors.textPrimary }}>Weekly Clinical Report</span><span style={{ fontSize: '13px', color: colors.textSecondary }}>Download a full PDF summary of compliance and vitals.</span></div></div>
-                                        <div style={{ display: 'flex', gap: '8px' }}><button onClick={async () => { const url = await generateWeeklyReport(patientId || 'mock_patient_id', patientName || 'Preview Patient', 'dataurl'); setPreviewUrl(url); }} style={{ padding: '12px 16px', backgroundColor: colors.white, color: colors.textSecondary, border: `1.5px solid ${colors.border}`, borderRadius: '10px', fontWeight: '700', cursor: 'pointer', fontSize: '13px', whiteSpace: 'nowrap' }}>Template Preview</button><button onClick={async () => { if (patientName || patientId) { await generateWeeklyReport(patientId || 'mock_patient_id', patientName || 'Patient', 'download'); } else { alert("Patient profile found but name not loaded yet."); } }} style={{ padding: '12px 24px', backgroundColor: colors.background, color: colors.primaryBlue, border: `1.5px solid ${colors.border}`, borderRadius: '10px', fontWeight: '700', cursor: 'pointer', fontSize: '14px', whiteSpace: 'nowrap' }}>Generate PDF</button></div>
+                                    <div className="clinical-report-card">
+                                        <div className="report-info">
+                                            <div className="report-icon-box"><FileText size={24} color={colors.primaryBlue} /></div>
+                                            <div className="report-text">
+                                                <span className="report-title">Weekly Clinical Report</span>
+                                                <span className="report-desc">Download a full PDF summary of compliance and vitals.</span>
+                                            </div>
+                                        </div>
+                                        <div className="report-actions">
+                                            <button onClick={async () => { const url = await generateWeeklyReport(patientId || 'mock_patient_id', patientName || 'Preview Patient', 'dataurl'); setPreviewUrl(url); }} className="secondary-report-btn">Preview</button>
+                                            <button onClick={async () => { if (patientName || patientId) { await generateWeeklyReport(patientId || 'mock_patient_id', patientName || 'Patient', 'download'); } else { alert("Patient profile found but name not loaded yet."); } }} className="primary-report-btn">Download</button>
+                                        </div>
                                     </div>
                                </div>
                            )}
@@ -359,7 +412,7 @@ export default function FamilyDashboard() {
                 <div className="mobile-only" style={{ padding: '0 16px', marginBottom: '16px' }}>{renderAlertBanner()}</div>
                 <div className="mobile-only"><FamilyBottomNav /></div>
             </div>
-            {previewUrl && (<div onClick={() => setPreviewUrl(null)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}><div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: '800px', height: '90vh', backgroundColor: colors.white, borderRadius: '16px', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: spacing.shadows.modal }}><div style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${colors.border}` }}><div><h3 style={{ fontSize: '18px', fontWeight: '800', margin: 0, color: colors.textPrimary }}>Report Preview</h3><p style={{ fontSize: '13px', color: colors.textSecondary, margin: '4px 0 0 0' }}>Interactive preview. Click outside to close.</p></div><button onClick={() => setPreviewUrl(null)} style={{ padding: '8px 16px', backgroundColor: colors.background, color: colors.textPrimary, border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700' }}>Close</button></div><iframe src={previewUrl} style={{ flex: 1, width: '100%', border: 'none' }} title="PDF Preview" /></div></div>)}
+            {previewUrl && (<div onClick={() => setPreviewUrl(null)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 24, 0.6)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}><div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: '800px', height: '90vh', backgroundColor: colors.white, borderRadius: '16px', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: spacing.shadows.modal }}><div style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${colors.border}` }}><div><h3 style={{ fontSize: '18px', fontWeight: '800', margin: 0, color: colors.textPrimary }}>Report Preview</h3><p style={{ fontSize: '13px', color: colors.textSecondary, margin: '4px 0 0 0' }}>Interactive preview. Click outside to close.</p></div><button onClick={() => setPreviewUrl(null)} style={{ padding: '8px 16px', backgroundColor: colors.background, color: colors.textPrimary, border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700' }}>Close</button></div><iframe src={previewUrl} style={{ flex: 1, width: '100%', border: 'none' }} title="PDF Preview" /></div></div>)}
         </div>
     );
 }

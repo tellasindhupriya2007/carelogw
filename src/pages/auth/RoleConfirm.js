@@ -14,7 +14,7 @@ const roleConfig = {
 export default function RoleConfirmScreen() {
     const navigate = useNavigate();
     const location = useLocation();
-    const { signInWithGoogle } = useAuthContext();
+    const { signInWithGoogle, devLogin } = useAuthContext();
 
     const selectedRole = location.state?.role || 'family';
     const config = roleConfig[selectedRole] || roleConfig.family;
@@ -30,7 +30,22 @@ export default function RoleConfirmScreen() {
             routeUser(isNewUser, userRole, userPatientId);
         } catch (err) {
             console.error('Google Sign In Error:', err);
-            setError('Sign in failed. Please try again.');
+            // Show the specific error message for debugging (e.g., auth/unauthorized-domain)
+            setError(err.message || 'Sign in failed. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
+    
+    const handleDevLogin = async () => {
+        setLoading(true);
+        setError('');
+        try {
+            const { isNewUser, userRole, userPatientId } = await devLogin(selectedRole);
+            routeUser(isNewUser, userRole, userPatientId);
+        } catch (err) {
+            console.error('Dev Login Error:', err);
+            setError('Dev Login failed.');
         } finally {
             setLoading(false);
         }
@@ -158,6 +173,24 @@ export default function RoleConfirmScreen() {
                         <p style={{ fontSize: '13px', color: '#94A3B8', textAlign: 'center', lineHeight: '1.5' }}>
                             Secure authentication powered by Google Cloud.
                         </p>
+
+                        <button
+                            onClick={handleDevLogin}
+                            style={{
+                                width: '100%',
+                                padding: '10px',
+                                backgroundColor: '#F1F5F9',
+                                border: '1px dashed #CBD5E1',
+                                borderRadius: '8px',
+                                color: '#64748B',
+                                fontSize: '13px',
+                                fontWeight: '500',
+                                cursor: 'pointer',
+                                marginTop: '10px'
+                            }}
+                        >
+                            🛠️ Dev Mode: Skip Login
+                        </button>
                     </div>
 
                     {/* Back link */}

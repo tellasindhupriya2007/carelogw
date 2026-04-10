@@ -31,9 +31,9 @@ export default function DoctorAlerts() {
             const q = query(collection(db, 'alerts'), where('doctorId', '==', user.uid));
             const unsub = onSnapshot(q, (snap) => {
                 const data = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => {
-                    const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-                    const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-                    return tb - ta;
+                    const dateA = a.timestamp?.toDate ? a.timestamp.toDate() : new Date(a.timestamp || 0);
+                    const dateB = b.timestamp?.toDate ? b.timestamp.toDate() : new Date(b.timestamp || 0);
+                    return dateB.getTime() - dateA.getTime();
                 });
                 setAlerts(data);
                 setAlertCount(data.filter(a => !a.isRead && a.status !== 'resolved').length);
@@ -63,23 +63,38 @@ export default function DoctorAlerts() {
 
     return (
         <DoctorShell alertCount={alertCount}>
-            <div style={{ flex: 1, overflowY: 'auto', backgroundColor: '#F8FAFC', padding: '40px' }}>
+            <div className="clinical-page-container">
                 <div style={{ maxWidth: '900px', margin: '0 auto' }}>
 
                     {/* Header */}
-                    <div style={{ marginBottom: '40px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
-                            <div style={{ width: '40px', height: '1px', backgroundColor: '#D92D20' }}></div>
-                            <span style={{ fontSize: '13px', fontWeight: '900', color: '#D92D20', textTransform: 'uppercase', letterSpacing: '1.5px' }}>Clinical Severity Oversight</span>
+                    <div className="responsive-title-group">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                            <div style={{ width: '30px', height: '1px', backgroundColor: '#D92D20' }}></div>
+                            <span style={{ fontSize: '11px', fontWeight: '900', color: '#D92D20', textTransform: 'uppercase', letterSpacing: '1px' }}>Clinical Oversight</span>
                         </div>
-                        <h1 style={{ fontSize: '36px', fontWeight: '900', color: '#101828', margin: '0 0 12px 0', letterSpacing: '-1.5px' }}>Diagnostic Alerts</h1>
-                        <p style={{ fontSize: '16px', color: '#475467', fontWeight: '600' }}>
+                        <h1 style={{ fontWeight: '900', color: '#101828', letterSpacing: '-1.5px' }}>Diagnostic Alerts</h1>
+                        <p style={{ fontSize: '16px', color: '#475467', fontWeight: '600', margin: 0 }}>
                             {criticalCount > 0 ? <span style={{ color: '#D92D20' }}>{criticalCount} high-risk events detected </span> : 'System status optimal'}
                         </p>
                     </div>
 
+                    {/* Elite Tab System */}
+                    <div className="tab-system-responsive">
+                        {SEVERITY_TABS.map(tab => (
+                            <button key={tab} onClick={() => setActiveTab(tab)} style={{
+                                flex: 1, padding: '12px 16px', borderRadius: '16px', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+                                fontSize: '13px', fontWeight: '800', transition: 'all 0.2s', whiteSpace: 'nowrap',
+                                backgroundColor: activeTab === tab ? '#ffffff' : 'transparent',
+                                color: activeTab === tab ? '#101828' : '#475467',
+                                boxShadow: activeTab === tab ? '0 4px 12px rgba(16, 24, 40, 0.08)' : 'none'
+                            }}>
+                                {tab}
+                            </button>
+                        ))}
+                    </div>
+
                     {/* Stats Pods */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px', marginBottom: '40px' }}>
+                    <div className="stats-grid-3">
                         {[
                             { label: 'Active Alerts', value: alerts.filter(a => a.status !== 'resolved').length, color: '#0052FF', bg: '#EFF4FF' },
                             { label: 'Critical Events', value: criticalCount, color: '#D92D20', bg: '#FFF1F0' },
@@ -89,21 +104,6 @@ export default function DoctorAlerts() {
                                 <div style={{ fontSize: '36px', fontWeight: '900', color: s.color, letterSpacing: '-1px', lineHeight: 1 }}>{s.value}</div>
                                 <div style={{ fontSize: '13px', fontWeight: '800', color: '#475467', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: '12px' }}>{s.label}</div>
                             </div>
-                        ))}
-                    </div>
-
-                    {/* Elite Tab System */}
-                    <div style={{ display: 'flex', gap: '8px', marginBottom: '32px', backgroundColor: '#F2F4F7', borderRadius: '20px', padding: '6px' }}>
-                        {SEVERITY_TABS.map(tab => (
-                            <button key={tab} onClick={() => setActiveTab(tab)} style={{
-                                flex: 1, padding: '12px 16px', borderRadius: '16px', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
-                                fontSize: '14px', fontWeight: '800', transition: 'all 0.2s',
-                                backgroundColor: activeTab === tab ? '#ffffff' : 'transparent',
-                                color: activeTab === tab ? '#101828' : '#475467',
-                                boxShadow: activeTab === tab ? '0 4px 12px rgba(16, 24, 40, 0.08)' : 'none'
-                            }}>
-                                {tab}
-                            </button>
                         ))}
                     </div>
 
@@ -148,8 +148,11 @@ function AlertCard({ alert, onResolve, onViewPatient }) {
 
     const timeAgo = (ts) => {
         if (!ts) return 'Unknown';
-        const diff = Date.now() - new Date(ts).getTime();
+        // Handle Firestore Timestamp
+        const date = ts.toDate ? ts.toDate() : new Date(ts);
+        const diff = Date.now() - date.getTime();
         const m = Math.floor(diff / 60000);
+        if (m < 0) return 'Just now';
         if (m < 60) return `${m}m ago`;
         const h = Math.floor(m / 60);
         if (h < 24) return `${h}h ago`;
@@ -157,13 +160,12 @@ function AlertCard({ alert, onResolve, onViewPatient }) {
     };
 
     return (
-        <div style={{
+        <div className="alert-card-responsive" style={{
             backgroundColor: '#ffffff', borderRadius: '24px', padding: '24px 32px',
             boxShadow: isCritical && !isResolved ? '0 12px 32px -8px rgba(217, 45, 32, 0.15)' : '0 4px 12px rgba(16, 24, 40, 0.02)',
             border: isCritical && !isResolved ? '1px solid #FEE4E2' : '1px solid #EAECF0',
             opacity: isResolved ? 0.6 : 1,
             transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center'
         }}>
             <div style={{ display: 'flex', gap: '24px', flex: 1, alignItems: 'center' }}>
                 {/* Status Indicator */}
@@ -171,20 +173,20 @@ function AlertCard({ alert, onResolve, onViewPatient }) {
                     {isCritical ? <AlertTriangle size={28} color={severityColor} /> : isWarning ? <Bell size={28} color={severityColor} /> : <CheckCircle size={28} color={severityColor} />}
                 </div>
                 
-                <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '4px' }}>
-                        <span style={{ fontSize: '18px', fontWeight: '900', color: '#101828' }}>{alert.patientName || 'Clinical Case'}</span>
-                        <span style={{ fontSize: '10px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '1px', color: severityColor, backgroundColor: severityBg, padding: '4px 10px', borderRadius: '8px', border: `1px solid ${severityColor}20` }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="responsive-flex-between" style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '4px' }}>
+                        <span className="patient-name" style={{ fontSize: '18px', fontWeight: '900', color: '#101828', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{alert.patientName || 'Clinical Case'}</span>
+                        <span className="badge-mobile" style={{ flexShrink: 0, fontSize: '10px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '1px', color: severityColor, backgroundColor: severityBg, padding: '4px 10px', borderRadius: '8px', border: `1px solid ${severityColor}20` }}>
                             {isResolved ? 'RESOLVED ARCHIVE' : severityLabel}
                         </span>
                     </div>
-                    <p style={{ fontSize: '15px', color: '#475467', fontWeight: '600', margin: '0 0 10px 0', lineHeight: 1.6 }}>{alert.message}</p>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#667085', fontWeight: '700' }}>
+                    <p className="alert-description" style={{ fontSize: '15px', color: '#475467', fontWeight: '600', margin: '0 0 10px 0', lineHeight: 1.6 }}>{alert.message}</p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '12px 20px' }}>
+                        <span className="meta-text" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#667085', fontWeight: '700' }}>
                             <Clock size={14} color="#98A2B3" /> {timeAgo(alert.timestamp)}
                         </span>
                         {alert.source && (
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#667085', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                            <span className="meta-text" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#667085', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                                 <User size={14} color="#98A2B3" /> SOURCE: {alert.source}
                             </span>
                         )}

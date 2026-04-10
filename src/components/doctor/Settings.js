@@ -1,105 +1,124 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { DS, card, sectionLabel, gradientBtn } from './ds';
 import { useAuthContext } from '../../context/AuthContext';
 import DoctorShell from './DoctorShell';
-import { User, Bell, Shield, LogOut, ChevronRight, Moon, Save } from 'lucide-react';
+import { LogOut, Save, User as UserIcon } from 'lucide-react';
+import { colors } from '../../styles/colors';
 
 const TOGGLE_ITEMS = [
-    { key: 'criticalAlerts', label: 'Critical Alert Notifications', desc: 'Real-time alerts for biological threshold breaches' },
-    { key: 'missedMeds', label: 'Medication Compliance', desc: 'Reports of non-adherence from caregivers' },
-    { key: 'careLogUpdates', label: 'Operational Sync', desc: 'Real-time updates on completed care directives' },
-    { key: 'familyMessages', label: 'Communication Hub', desc: 'Notifications for new team or family inquiries' },
-    { key: 'weeklyReport', label: 'Clinical Analytics', desc: 'Predictive weekly summary of patient trajectories' },
+    { key: 'criticalAlerts', label: 'Critical Alerts', desc: 'Real-time threshold breach alerts' },
+    { key: 'missedMeds', label: 'Compliance Reports', desc: 'Reports of non-adherence' },
+    { key: 'careLogUpdates', label: 'Operational Sync', desc: 'Daily care directive updates' },
+    { key: 'familyMessages', label: 'Family Hub', desc: 'New message notifications' },
 ];
 
 export default function DoctorSettings() {
     const navigate = useNavigate();
-    const { user } = useAuthContext();
-    const [toggles, setToggles] = useState({ criticalAlerts: true, missedMeds: true, careLogUpdates: false, familyMessages: true, weeklyReport: false });
-    const [darkMode, setDarkMode] = useState(false);
+    const { user, logout } = useAuthContext();
+    const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
     const [saved, setSaved] = useState(false);
+    const [toggles, setToggles] = useState({
+        criticalAlerts: true, missedMeds: true, careLogUpdates: true, familyMessages: false
+    });
+
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth <= 768);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     const handleSave = () => {
         setSaved(true);
-        setTimeout(() => setSaved(false), 2000);
+        setTimeout(() => setSaved(false), 3000);
     };
-
-    const Toggle = ({ toggled, onToggle }) => (
-        <div onClick={onToggle} style={{ width: '44px', height: '24px', borderRadius: '12px', backgroundColor: toggled ? '#0052FF' : '#E4E7EC', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
-            <div style={{ position: 'absolute', top: '2px', left: toggled ? '22px' : '2px', width: '20px', height: '20px', borderRadius: '50%', backgroundColor: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }} />
-        </div>
-    );
 
     return (
         <DoctorShell alertCount={0}>
-            <div style={{ flex: 1, overflowY: 'auto', backgroundColor: '#F9FAFB', padding: '56px 48px' }}>
-                <div style={{ maxWidth: '820px', margin: '0 auto' }}>
-                    <div style={{ marginBottom: '48px' }}>
-                        <h1 style={{ fontSize: '36px', fontWeight: '900', color: '#101828', margin: '0 0 8px 0', letterSpacing: '-1.5px' }}>Institutional Settings</h1>
-                        <p style={{ fontSize: '16px', color: '#667085', fontWeight: '600', margin: 0 }}>Configure clinical parameters, operational sync, and practitioner preferences.</p>
-                    </div>
+            <div className="clinical-page-container" style={{ padding: isMobile ? '16px' : '40px', maxWidth: '820px', margin: '0 auto' }}>
+                <header style={{ marginBottom: '32px' }}>
+                    <h1 style={{ fontWeight: '900', color: '#101828', fontSize: isMobile ? '24px' : '32px', letterSpacing: '-1px', margin: 0 }}>Institutional Settings</h1>
+                    <p style={{ color: '#667085', fontSize: '14px', marginTop: '4px' }}>Configure your clinical oversight parameters.</p>
+                </header>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '24px' }}>
-                        {/* Profile Section */}
-                        <div style={{ backgroundColor: '#ffffff', borderRadius: '32px', padding: '40px', border: '1px solid #EAECF0', boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '32px' }}>
-                                <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#0052FF' }}></div>
-                                <span style={{ fontSize: '14px', fontWeight: '900', color: '#667085', textTransform: 'uppercase', letterSpacing: '1px' }}>Practitioner Identity</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    {/* Identity Card */}
+                    <section style={{ backgroundColor: 'white', borderRadius: '24px', padding: isMobile ? '20px' : '32px', border: '1px solid #EAECF0', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '24px' }}>
+                            <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#0052FF' }} />
+                            <span style={{ fontSize: '11px', fontWeight: '900', color: '#98A2B3', textTransform: 'uppercase', letterSpacing: '1px' }}>Practitioner Identity</span>
+                        </div>
+                        
+                        <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: '20px', marginBottom: '24px' }}>
+                            <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: '#F0F5FF', color: '#0052FF', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                <UserIcon size={32} />
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '24px', marginBottom: '40px' }}>
-                                <div style={{ width: '72px', height: '72px', borderRadius: '20px', background: '#0052FF', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '28px', fontWeight: '900' }}>
-                                    {user?.email ? user.email[0].toUpperCase() : 'D'}
+                            <div style={{ minWidth: 0 }}>
+                                <div style={{ fontSize: isMobile ? '18px' : '22px', fontWeight: '900', color: '#101828', wordBreak: 'break-word', lineHeight: 1.2 }}>Dr. {user?.displayName || 'Tella Sindhu Priya'}</div>
+                                <div style={{ color: '#667085', fontSize: '13px', marginTop: '2px', fontWeight: '600' }}>{user?.email || 'practioner@carelog.health'}</div>
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px' }}>
+                            {[
+                                { label: 'Assigned Hospital', value: 'CareLog Health Net' },
+                                { label: 'Registry Licensing', value: 'MCI-2024-EX-V4' }
+                            ].map((item, i) => (
+                                <div key={i} style={{ padding: '14px 18px', backgroundColor: '#F9FAFB', borderRadius: '16px', border: '1px solid #F2F4F7' }}>
+                                    <div style={{ fontSize: '10px', color: '#98A2B3', fontWeight: '900', textTransform: 'uppercase', marginBottom: '4px' }}>{item.label}</div>
+                                    <div style={{ fontSize: '14px', fontWeight: '700', color: '#1D2939' }}>{item.value}</div>
                                 </div>
-                                <div>
-                                    <div style={{ fontSize: '24px', fontWeight: '900', color: '#101828' }}>Dr. {user?.displayName || 'Medical Officer'}</div>
-                                    <div style={{ fontSize: '16px', color: '#667085', fontWeight: '600' }}>{user?.email}</div>
+                            ))}
+                        </div>
+                    </section>
+
+                    {/* Notification Toggles */}
+                    <section style={{ backgroundColor: 'white', borderRadius: '24px', padding: isMobile ? '20px' : '32px', border: '1px solid #EAECF0' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px' }}>
+                            <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#EF4444' }} />
+                            <span style={{ fontSize: '11px', fontWeight: '900', color: '#98A2B3', textTransform: 'uppercase', letterSpacing: '1px' }}>Oversight Alerts</span>
+                        </div>
+                        
+                        {TOGGLE_ITEMS.map((item, idx) => (
+                            <div key={item.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 0', borderBottom: idx === TOGGLE_ITEMS.length - 1 ? 'none' : '1px solid #F2F4F7' }}>
+                                <div style={{ paddingRight: '16px' }}>
+                                    <div style={{ fontSize: isMobile ? '14px' : '16px', fontWeight: '800', color: '#1D2939' }}>{item.label}</div>
+                                    <div style={{ fontSize: '12px', color: '#667085', marginTop: '2px' }}>{item.desc}</div>
                                 </div>
+                                <Toggle active={toggles[item.key]} onClick={() => setToggles(prev => ({ ...prev, [item.key]: !prev[item.key] }))} />
                             </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-                                {[
-                                    { label: 'Assigned Hospital', value: 'CareLog Health Net' },
-                                    { label: 'Registry Licensing', value: 'MCI-2024-EX-V4' },
-                                ].map((f, i) => (
-                                    <div key={i}>
-                                        <div style={{ fontSize: '12px', fontWeight: '900', color: '#98A2B3', textTransform: 'uppercase', marginBottom: '8px' }}>{f.label}</div>
-                                        <div style={{ fontSize: '16px', fontWeight: '700', color: '#101828', padding: '16px 20px', backgroundColor: '#F9FAFB', borderRadius: '16px', border: '1px solid #F2F4F7' }}>{f.value}</div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
+                        ))}
+                    </section>
 
-                        {/* Notifications */}
-                        <div style={{ backgroundColor: '#ffffff', borderRadius: '32px', padding: '40px', border: '1px solid #EAECF0', boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '32px' }}>
-                                <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#D92D20' }}></div>
-                                <span style={{ fontSize: '14px', fontWeight: '900', color: '#667085', textTransform: 'uppercase', letterSpacing: '1px' }}>Oversight Alerts</span>
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                {TOGGLE_ITEMS.map((item, idx) => (
-                                    <div key={item.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 0', borderBottom: idx === TOGGLE_ITEMS.length - 1 ? 'none' : '1px solid #F2F4F7' }}>
-                                        <div style={{ paddingRight: '24px' }}>
-                                            <div style={{ fontSize: '18px', fontWeight: '900', color: '#101828' }}>{item.label}</div>
-                                            <div style={{ fontSize: '14px', fontWeight: '600', color: '#667085', marginTop: '4px' }}>{item.desc}</div>
-                                        </div>
-                                        <Toggle toggled={toggles[item.key]} onToggle={() => setToggles(t => ({ ...t, [item.key]: !t[item.key] }))} />
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Actions */}
-                        <div style={{ display: 'flex', gap: '20px', marginTop: '24px' }}>
-                            <button onClick={handleSave} style={{ flex: 1, height: '64px', backgroundColor: '#0052FF', color: 'white', borderRadius: '20px', border: 'none', fontWeight: '900', fontSize: '18px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', boxShadow: '0 8px 20px rgba(0,82,255,0.2)' }}>
-                                <Save size={20} /> {saved ? 'System Parameters Synchronized' : 'Commit Configuration'}
-                            </button>
-                            <button onClick={async () => { navigate('/auth/splash'); }} style={{ height: '64px', padding: '0 40px', borderRadius: '20px', border: 'none', backgroundColor: '#FEF2F2', color: '#D92D20', fontWeight: '900', fontSize: '18px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                <LogOut size={20} /> End Session
-                            </button>
-                        </div>
+                    {/* Actions */}
+                    <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '12px', marginTop: '8px' }}>
+                        <button onClick={handleSave} style={{ flex: 1, height: '56px', backgroundColor: '#0052FF', color: 'white', border: 'none', borderRadius: '16px', fontWeight: '900', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,82,255,0.2)' }}>
+                            <Save size={20} /> {saved ? 'System Updated' : 'Commit Changes'}
+                        </button>
+                        <button onClick={async () => { await logout(); navigate('/auth/splash'); }} style={{ height: '56px', backgroundColor: '#FEF2F2', color: '#EF4444', border: 'none', borderRadius: '16px', fontWeight: '900', padding: '0 24px', cursor: 'pointer' }}>
+                            <LogOut size={20} />
+                        </button>
                     </div>
                 </div>
             </div>
         </DoctorShell>
+    );
+}
+
+function Toggle({ active, onClick }) {
+    return (
+        <div 
+            onClick={onClick}
+            style={{ 
+                width: '44px', height: '24px', borderRadius: '20px', 
+                backgroundColor: active ? '#0052FF' : '#E2E8F0',
+                position: 'relative', cursor: 'pointer', transition: '0.3s'
+            }}
+        >
+            <div style={{ 
+                position: 'absolute', top: '2px', left: active ? '22px' : '2px', 
+                width: '20px', height: '20px', backgroundColor: 'white', borderRadius: '50%',
+                transition: '0.3s', boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+            }} />
+        </div>
     );
 }

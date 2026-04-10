@@ -60,11 +60,22 @@ export default function DoctorDashboard() {
     const displayPatients = enrichedPatients.length > 0 ? enrichedPatients : patients;
     const filtered = displayPatients.filter(p => !searchQuery || p.name?.toLowerCase().includes(searchQuery.toLowerCase()));
     const criticalCount = displayPatients.filter(p => p.status === 'RED').length;
+    const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth <= 768);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    const showSidebar = !isMobile || (isMobile && !selectedPatientId);
+    const showDetails = !isMobile || (isMobile && !!selectedPatientId);
 
     return (
         <DoctorShell alertCount={alertCount}>
-            <div style={{ display: 'flex', height: '100%', overflow: 'hidden', backgroundColor: '#F9FAFB' }}>
-                <div style={{ width: '300px', minWidth: '300px', backgroundColor: '#ffffff', borderRight: '1px solid #EAECF0', display: 'flex', flexDirection: 'column' }}>
+            <div className="doctor-dashboard-container">
+                {showSidebar && (
+                    <div className="patient-registry-sidebar">
                     <div style={{ padding: '24px 20px 16px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                             <h2 style={{ fontSize: '18px', fontWeight: '900', color: '#101828', margin: 0, letterSpacing: '-0.5px' }}>Diagnostic Registry</h2>
@@ -105,13 +116,17 @@ export default function DoctorDashboard() {
                         </div>
                     </div>
                 </div>
-                <div style={{ flex: 1, overflowY: 'auto', backgroundColor: '#F9FAFB' }}>
-                    {selectedPatientId ? (
-                        <PatientDetails key={selectedPatientId} inlinePatientId={selectedPatientId} onClose={() => setSelectedPatientId(null)} />
-                    ) : (
-                        <WelcomePanel patients={displayPatients} alertCount={alertCount} navigate={navigate} onSelectPatient={setSelectedPatientId} user={user} />
-                    )}
-                </div>
+                )}
+                
+                {showDetails && (
+                    <div className="dashboard-main-view">
+                        {selectedPatientId ? (
+                            <PatientDetails key={selectedPatientId} inlinePatientId={selectedPatientId} onClose={() => setSelectedPatientId(null)} />
+                        ) : (
+                            <WelcomePanel patients={displayPatients} alertCount={alertCount} navigate={navigate} onSelectPatient={setSelectedPatientId} user={user} />
+                        )}
+                    </div>
+                )}
             </div>
         </DoctorShell>
     );
@@ -128,7 +143,7 @@ function WelcomePanel({ patients, alertCount, navigate, onSelectPatient, user })
                     <h1 style={{ fontSize: '32px', fontWeight: '900', color: '#101828', margin: '0 0 6px 0', letterSpacing: '-1.5px' }}>Dr. {doctorName}</h1>
                     <p style={{ fontSize: '16px', color: '#475467', fontWeight: '700', margin: 0 }}>{patients.length} monitors online · <span style={{ color: '#079455' }}>Diagnostic Sync Active</span></p>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', marginBottom: '48px' }}>
+                <div className="welcome-stats-grid">
                     {[
                         { label: 'Registry', value: patients.length, color: '#0052FF', bg: '#EFF4FF', icon: Users },
                         { label: 'System Triage', value: alertCount, color: '#D92D20', bg: '#FFF1F0', icon: AlertTriangle, onClick: () => navigate('/doctor/alerts') },
