@@ -5,9 +5,17 @@ import { subscribeToPatientMedia } from '../../services/mediaService';
 import { subscribeToTasks, deleteRelativeTask } from '../../services/taskService';
 import { 
     Activity, HeartPulse, Thermometer, ShieldCheck, 
-    ChevronRight, X, CheckCircle, AlertTriangle, Trash2, Clock
+    ChevronRight, X, Trash2
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+
+// Shared utility for consistent clinical timestamps
+const formatDate = (val) => {
+    if (!val) return 'Recently';
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return 'Recently';
+    return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+};
 
 export default function PatientDetails({ inlinePatientId, onClose }) {
     const id = inlinePatientId;
@@ -21,7 +29,6 @@ export default function PatientDetails({ inlinePatientId, onClose }) {
     const [tasks, setTasks] = useState([]);
     const [activeTab, setActiveTab] = useState('Overview');
     const [newNote, setNewNote] = useState('');
-    const [showTeam, setShowTeam] = useState(false);
 
     useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth <= 768);
@@ -31,32 +38,30 @@ export default function PatientDetails({ inlinePatientId, onClose }) {
 
     useEffect(() => {
         if (!id) return;
-        const pSub = onSnapshot(doc(db, 'patients', id), s => setPatient({ id: s.id, ...s.data() }));
+        onSnapshot(doc(db, 'patients', id), s => setPatient({ id: s.id, ...s.data() }));
         
         const vQ = query(collection(db, 'vitals'), where('patientId', '==', id));
-        const vSub = onSnapshot(vQ, s => {
+        onSnapshot(vQ, s => {
             const history = s.docs.map(d => ({ id: d.id, ...d.data() }))
                 .sort((a,b) => new Date(b.recordedAt) - new Date(a.recordedAt));
             setVitalsHistory(history);
             setTrendData([...history].reverse().map(v => ({
-                time: v.recordedAt ? new Date(v.recordedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--',
+                time: formatDate(v.recordedAt),
                 sys: v.bp?.systolic || v.bpSystolic || 0
             })));
         });
 
         const lQ = query(collection(db, 'dailyLogs'), where('patientId', '==', id));
-        const lSub = onSnapshot(lQ, s => {
+        onSnapshot(lQ, s => {
             const logs = s.docs.flatMap(d => (d.data().observations || []).map(o => ({ ...o, date: d.data().date })));
             setCareLogs(logs.sort((a,b) => new Date(b.recordedAt) - new Date(a.recordedAt)));
         });
 
         const nQ = query(collection(db, 'clinicalNotes'), where('patientId', '==', id));
-        const nSub = onSnapshot(nQ, s => setClinicalNotes(s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp))));
+        onSnapshot(nQ, s => setClinicalNotes(s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp))));
         
-        const mSub = subscribeToPatientMedia(id, setMedia);
-        const tSub = subscribeToTasks(id, setTasks);
-
-        return () => { pSub(); vSub(); lSub(); nSub(); mSub(); tSub(); };
+        subscribeToPatientMedia(id, setMedia);
+        subscribeToTasks(id, setTasks);
     }, [id]);
 
     const handleAddNote = async () => {
@@ -102,7 +107,6 @@ export default function PatientDetails({ inlinePatientId, onClose }) {
 
 function OverviewTab({ trendData, vitalsHistory, isMobile }) {
     const latest = vitalsHistory[0] || {};
-    // Removed O2 as it is not collected
     const vitals = [
         { label: 'BP', value: `${latest.bp?.systolic || latest.bpSystolic || '--'}/${latest.bp?.diastolic || latest.bpDiacholic || '--'}`, icon: Activity, color: '#0052FF', bg: '#EFF4FF' },
         { label: 'HR', value: latest.heartRate || '--', icon: HeartPulse, color: '#D92D20', bg: '#FFF1F0' },
@@ -124,7 +128,7 @@ function OverviewTab({ trendData, vitalsHistory, isMobile }) {
                     );
                 })}
             </div>
-            <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '16px', border: '1px solid #EAECF0', minHeight: '220px' }}>
+            <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '16px', border: '1px solid #EAECF0', height: '220px' }}>
                 <h3 style={{ fontSize: '14px', fontWeight: '900', marginBottom: '16px', color: '#101828' }}>Biological Trend</h3>
                 <div style={{ height: '140px' }}>
                     <ResponsiveContainer width="100%" height="100%">
@@ -142,13 +146,6 @@ function OverviewTab({ trendData, vitalsHistory, isMobile }) {
 }
 
 function VitalsTab({ vitalsHistory }) {
-    const formatDate = (val) => {
-        if (!val) return 'Recently';
-        const d = new Date(val);
-        if (isNaN(d.getTime())) return 'Recently';
-        return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    };
-
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {vitalsHistory.map((v, i) => (
@@ -171,11 +168,7 @@ function LogsTab({ careLogs }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {careLogs.map((log, i) => (
                 <div key={i} style={{ backgroundColor: 'white', padding: '16px', borderRadius: '12px', border: '1px solid #EAECF0', display: 'flex', justifyContent: 'space-between' }}>
-                    <div>
-                        <div style={{ fontSize: '14px', fontWeight: '800' }}>{log.mood || 'Standard Check'}</div>
-                        <div style={{ fontSize: '12px', color: '#667085' }}>By {log.caretakerName || 'Caregiver'} · {log.date}</div>
-                    </div>
-                    {log.isCritical && <span style={{ backgroundColor: '#FEF2F2', color: '#EF4444', padding: '4px 8px', borderRadius: '6px', fontSize: '10px', fontWeight: '900' }}>CRITICAL</span>}
+                    <div><div style={{ fontSize: '14px', fontWeight: '800' }}>{log.mood || 'Check-in'}</div><div style={{ fontSize: '12px', color: '#667085' }}>By {log.caretakerName || 'Caregiver'} · {log.date}</div></div>
                 </div>
             ))}
         </div>
@@ -187,10 +180,7 @@ function MediaTab({ media }) {
     return (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '12px' }}>
             {realMedia.map((m, i) => (
-                <div key={i} style={{ borderRadius: '12px', overflow: 'hidden', border: '1px solid #EAECF0' }}>
-                    <img src={m.url} style={{ width: '100%', height: '110px', objectFit: 'cover' }} />
-                    <div style={{ padding: '8px', fontSize: '12px', fontWeight: '700' }}>{m.description || 'Archive'}</div>
-                </div>
+                <div key={i} style={{ borderRadius: '12px', overflow: 'hidden', border: '1px solid #EAECF0' }}><img src={m.url} style={{ width: '100%', height: '110px', objectFit: 'cover' }} /></div>
             ))}
         </div>
     );
@@ -205,13 +195,11 @@ function PrescriptionsTab({ patient, patientId }) {
             <h3 style={{ fontSize: '14px', fontWeight: '900', marginBottom: '16px' }}>Active Medications</h3>
             {meds.map((m, i) => (
                 <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', background: '#F9FAFB', borderRadius: '10px', marginBottom: '6px' }}>
-                    <span style={{ fontSize: '13px', fontWeight: '700' }}>{m}</span>
-                    <button onClick={() => save(meds.filter((_,j)=>j!==i))} style={{ border: 'none', background: 'none', color: '#EF4444' }}><Trash2 size={16}/></button>
+                    {m}<button onClick={() => save(meds.filter((_,j)=>j!==i))} style={{ border: 'none', background: 'none', color: '#EF4444' }}><Trash2 size={16}/></button>
                 </div>
             ))}
             <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
-                <input value={newMed} onChange={e=>setNewMed(e.target.value)} placeholder="Add med..." style={{ flex: 1, padding: '10px', borderRadius: '10px', border: '1px solid #EAECF0' }} />
-                <button onClick={()=>{ if(newMed.trim()){ save([...meds, newMed.trim()]); setNewMed(''); } }} style={{ background: '#0052FF', color: 'white', border: 'none', borderRadius: '10px', padding: '0 20px', fontWeight: '800' }}>Add</button>
+                <input value={newMed} onChange={e=>setNewMed(e.target.value)} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: '1px solid #EAECF0' }} /><button onClick={()=>{ if(newMed.trim()){ save([...meds, newMed.trim()]); setNewMed(''); } }} style={{ background: '#0052FF', color: 'white', border: 'none', borderRadius: '10px', padding: '0 20px', fontWeight: '800' }}>Add</button>
             </div>
         </div>
     );
@@ -222,8 +210,7 @@ function CarePlanTab({ tasks, patientId }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {tasks.map((t, i) => (
                 <div key={i} style={{ background: 'white', padding: '16px', borderRadius: '12px', border: '1px solid #EAECF0', display: 'flex', justifyContent: 'space-between' }}>
-                    <div><div style={{ fontWeight: '800' }}>{t.title}</div><div style={{ fontSize: '11px', color: '#667085' }}>{t.time}</div></div>
-                    <button onClick={() => deleteRelativeTask(patientId, t.id)} style={{ border: 'none', color: '#EF4444', background: 'none' }}><Trash2 size={16}/></button>
+                    <div>{t.title}</div><button onClick={() => deleteRelativeTask(patientId, t.id)} style={{ border: 'none', color: '#EF4444', background: 'none' }}><Trash2 size={16}/></button>
                 </div>
             ))}
         </div>
@@ -234,13 +221,11 @@ function NotesTab({ clinicalNotes, newNote, setNewNote, onAdd }) {
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div style={{ background: 'white', padding: '20px', borderRadius: '16px', border: '1px solid #EAECF0' }}>
-                <textarea value={newNote} onChange={e=>setNewNote(e.target.value)} placeholder="Write note..." style={{ width: '100%', height: '80px', borderRadius: '10px', border: '1px solid #F1F1F1', padding: '12px', marginBottom: '10px' }} />
-                <button onClick={onAdd} style={{ background: '#0052FF', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 20px', fontWeight: '800' }}>Save Note</button>
+                <textarea value={newNote} onChange={e=>setNewNote(e.target.value)} style={{ width: '100%', height: '80px', borderRadius: '10px', border: '1px solid #F1F1F1', padding: '12px', marginBottom: '10px' }} /><button onClick={onAdd} style={{ background: '#0052FF', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 20px', fontWeight: '800' }}>Post Note</button>
             </div>
             {clinicalNotes.map((n, i) => (
                 <div key={i} style={{ background: 'white', padding: '16px', borderRadius: '12px', border: '1px solid #F1F1F1' }}>
-                    <div style={{ fontSize: '11px', color: '#667085', marginBottom: '4px' }}>{formatDate(n.timestamp)}</div>
-                    <div style={{ fontSize: '14px' }}>{n.note}</div>
+                    <div style={{ fontSize: '11px', color: '#667085', marginBottom: '4px' }}>{formatDate(n.timestamp)}</div><div style={{ fontSize: '14px' }}>{n.note}</div>
                 </div>
             ))}
         </div>
