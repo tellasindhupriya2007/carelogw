@@ -1,26 +1,35 @@
-# 🔗 1-Minute Fix: Enable Prescription Uploads (CORS)
+# 🛠️ Fix: Unblock Photos, Voice, and Prescriptions
 
-Your console shows `Blocked by CORS policy`. This is a security feature from Google that prevents your `localhost` from writing to your Storage bucket until you approve it.
+Your clinical uploads are currently failing because **Firebase Storage** is blocking requests from your local browser (CORS Policy). Follow these steps to fix it:
 
-### Step-by-Step "Unlock All" Fix:
-1. Go directly to [shell.cloud.google.com](https://shell.cloud.google.com).
-2. Ensure you are in project `carelog-e2196`.
-3. In the terminal that opens at the bottom, paste this EXACT command:
+### Option 1: The Fast Way (GCP Console)
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/).
+2. Open the **Cloud Shell** (the `>_` icon in the top right).
+3. Create a file named `cors.json` by running:
    ```bash
-   echo '[{"origin": ["*"],"method": ["GET", "POST", "PUT", "DELETE", "HEAD"],"responseHeader": ["*"],"maxAgeSeconds": 3600}]' > cors.json
+   nano cors.json
+   ```
+4. Paste this exact configuration:
+   ```json
+   [
+     {
+       "origin": ["*"],
+       "method": ["GET", "POST", "PUT", "DELETE", "HEAD"],
+       "responseHeader": ["Content-Type", "Authorization", "x-goog-resumable"],
+       "maxAgeSeconds": 3600
+     }
+   ]
+   ```
+5. Press `CTRL+O`, then `ENTER`, then `CTRL+X` to save.
+6. Apply the fix to your bucket (Replace `YOUR_BUCKET_ID` with `carelog-e2196.appspot.com`):
+   ```bash
    gsutil cors set cors.json gs://carelog-e2196.appspot.com
    ```
-4. Press Enter. Done! Your uploads will work immediately.
+
+### Option 2: Verify WebSockets
+If you are seeing "Socket connection failed" in the console, it means the Render backend is idling. 
+1. Open [https://carelog-backend.onrender.com](https://carelog-backend.onrender.com) in your browser.
+2. If it loads "CareLog Backend is running," the sockets will reconnect automatically.
 
 ---
-
-### IMPORTANT: Restart Your Local App
-If you still see errors, it is because your local app is still using old settings.
-1. Go to your local terminal where `npm run dev` is running.
-2. Press **CTRL+C** to stop it.
-3. Run **npm run dev** again.
-
-### Why was it failing?
-- **Index Error**: I fixed this in the code—no more index required!
-- **Socket Error**: Your Render server falls asleep. Refresh the page and wait 45 seconds; it will wake up automatically.
-- **CORS Error**: You MUST run the command above in the Google Cloud Shell to tell Google that your computer is allowed to upload files.
+**Once these are applied, your voice recordings and prescriptions will start syncing instantly!**

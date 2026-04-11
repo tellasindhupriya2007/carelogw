@@ -60,10 +60,19 @@ export default function WeeklyReport() {
     // State
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [weekStart, setWeekStart] = useState(() => getFirstDayOfWeek(new Date()));
+    const queryParams = new URLSearchParams(window.location.search);
+    const initialWeekStr = queryParams.get('week');
+    const [weekStart, setWeekStart] = useState(() => {
+        if (initialWeekStr) {
+            const d = new Date(initialWeekStr);
+            if (!isNaN(d.getTime())) return d;
+        }
+        return getFirstDayOfWeek(new Date());
+    });
     const [logs, setLogs] = useState({});
     const [stats, setStats] = useState(null);
     const [generatingPDF, setGeneratingPDF] = useState(false);
+    const [sendingToDoc, setSendingToDoc] = useState(false);
     const [toast, setToast] = useState(null);
 
     const showToast = (message, type) => {
@@ -343,6 +352,50 @@ export default function WeeklyReport() {
         setGeneratingPDF(false);
     };
 
+    const sendToDoc = async () => {
+        if (!stats || !patientId) return;
+        setSendingToDoc(true);
+        try {
+            const weekStr = formatDateObj(weekStart);
+            const reportRef = doc(db, 'weeklyReports', `${patientId}_${weekStr}`);
+            
+            // Create a notification message for the doctor
+            // Fetch patient info to get their name and doctor
+            const patientSnap = await getDoc(doc(db, 'patients', patientId));
+            if (patientSnap.exists()) {
+                const pData = patientSnap.data();
+                
+                // Mark as shared with doc + include doctorId for reporting archive
+                await setDoc(reportRef, {
+                    sharedWithDoc: true,
+                    doctorId: pData.doctorId || null, // VITAL: LINK TO DOCTOR
+                    sharedAt: serverTimestamp(),
+                    patientId: patientId, 
+                    patientName: pData.name || 'Unknown Patient',
+                    status: 'shared'
+                }, { merge: true });
+
+                if (pData.doctorId) {
+                    const messagesRef = collection(db, 'messages');
+                    await setDoc(doc(messagesRef), {
+                        senderId: patientId,
+                        receiverId: pData.doctorId,
+                        text: `📋 New Weekly Health Report Shared for the week ${getDisplayWeek(weekStart)}. Please review in the Reports archive.`,
+                        type: 'system',
+                        createdAt: serverTimestamp(),
+                        isRead: false
+                    });
+                }
+            }
+
+            showToast("Report Sent to Doctor!", "success");
+        } catch (e) {
+            console.error("Error sending report to doctor", e);
+            showToast("Failed to send report.", "error");
+        }
+        setSendingToDoc(false);
+    };
+
     const SectionHeading = ({ title }) => (
         <h3 style={{ fontSize: '16px', fontWeight: '600', color: colors.textPrimary, marginBottom: '16px', borderBottom: `2px solid ${colors.border}`, paddingBottom: '8px' }}>
             {title}
@@ -551,15 +604,45 @@ export default function WeeklyReport() {
                 )}
             </div>
 
-            {/* Sticky Bottom Area */}
-            <div className="report-footer">
-                <div className="footer-content">
-                    <PrimaryButton label="Download PDF Report" onClick={generatePDF} isLoading={generatingPDF || loading} disabled={generatingPDF || loading} />
-                </div>
+            {/* Premium Sticky Footer */}
+            <div className="report-footer" style={{
+                position: 'sticky', bottom: 0, left: 0, right: 0,
+                backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                backdropFilter: 'blur(10px)',
+                borderTop: '1px solid #EAECF0',
+                padding: '16px',
+                zIndex: 100,
+                display: 'flex',
+                gap: '12px'
+            }}>
+                <button 
+                    onClick={generatePDF}
+                    disabled={generatingPDF || loading}
+                    style={{
+                        flex: 1, height: '48px', borderRadius: '12px', border: '1.5px solid #EAECF0',
+                        backgroundColor: 'white', color: '#344054', fontSize: '14px', fontWeight: '800',
+                        cursor: 'pointer', transition: 'all 0.2s'
+                    }}
+                >
+                    {generatingPDF ? 'Exporting...' : 'Save PDF'}
+                </button>
+                <button 
+                    onClick={sendToDoc}
+                    disabled={sendingToDoc || loading}
+                    style={{
+                        flex: 2, height: '48px', borderRadius: '12px', border: 'none',
+                        backgroundColor: '#0052FF', color: 'white', fontSize: '14px', fontWeight: '900',
+                        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                        boxShadow: '0 4px 12px rgba(0, 82, 255, 0.25)', transition: 'all 0.2s'
+                    }}
+                >
+                    {sendingToDoc ? 'Sharing...' : 'Send to Doctor'}
+                </button>
             </div>
 
             <style>{`
         @keyframes slideDown { from { transform: translateY(-10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .report-footer button:active { transform: scale(0.97); }
       `}</style>
         </div>
     );

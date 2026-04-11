@@ -3,18 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthContext } from '../../context/AuthContext';
 import { collection, query, where, onSnapshot, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
-import { DS, card, sectionLabel, gradientBtn, statusMeta } from './ds';
 import DoctorShell from './DoctorShell';
-import { Bell, AlertTriangle, CheckCircle, ExternalLink, Filter, Clock, User } from 'lucide-react';
+import { Bell, AlertTriangle, Clock } from 'lucide-react';
 
 const SEVERITY_TABS = ['All', 'Critical', 'Warning', 'Resolved'];
-
-// Skeleton Loader
-function Skeleton({ height = '60px', borderRadius = '14px' }) {
-    return (
-        <div style={{ height, borderRadius, backgroundColor: DS.surfaceHigh, animation: 'pulse 1.5s ease-in-out infinite' }} />
-    );
-}
 
 export default function DoctorAlerts() {
     const navigate = useNavigate();
@@ -22,34 +14,30 @@ export default function DoctorAlerts() {
     const [alerts, setAlerts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('All');
-    const [alertCount, setAlertCount] = useState(0);
-    const [error, setError] = useState(null);
+    const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth <= 768);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     useEffect(() => {
         if (!user?.uid) return;
-        try {
-            const q = query(collection(db, 'alerts'), where('doctorId', '==', user.uid));
-            const unsub = onSnapshot(q, (snap) => {
-                const data = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => {
-                    const dateA = a.timestamp?.toDate ? a.timestamp.toDate() : new Date(a.timestamp || 0);
-                    const dateB = b.timestamp?.toDate ? b.timestamp.toDate() : new Date(b.timestamp || 0);
-                    return dateB.getTime() - dateA.getTime();
-                });
-                setAlerts(data);
-                setAlertCount(data.filter(a => !a.isRead && a.status !== 'resolved').length);
-                setLoading(false);
-            }, (err) => { setError('Failed to load diagnostics.'); setLoading(false); });
-            return () => unsub();
-        } catch (e) {
-            setError('Diagnostic stream error.');
+        const q = query(collection(db, 'alerts'), where('doctorId', '==', user.uid));
+        return onSnapshot(q, (snap) => {
+            const data = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => {
+                const dateA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+                const dateB = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+                return dateB - dateA;
+            });
+            setAlerts(data);
             setLoading(false);
-        }
-    }, []);
+        });
+    }, [user?.uid]);
 
     const handleResolve = async (alertId) => {
-        try {
-            await updateDoc(doc(db, 'alerts', alertId), { isRead: true, status: 'resolved' });
-        } catch (e) { console.error(e); }
+        await updateDoc(doc(db, 'alerts', alertId), { isRead: true, status: 'resolved' });
     };
 
     const filtered = alerts.filter(a => {
@@ -58,155 +46,184 @@ export default function DoctorAlerts() {
         return a.severity === activeTab.toLowerCase() && a.status !== 'resolved';
     });
 
-    const criticalCount = alerts.filter(a => a.severity === 'critical' && a.status !== 'resolved').length;
-    const warningCount = alerts.filter(a => a.severity === 'warning' && a.status !== 'resolved').length;
+    const stats = [
+        { label: 'All', value: alerts.filter(a => a.status !== 'resolved').length, color: '#0052FF' },
+        { label: 'Critical', value: alerts.filter(a => a.severity === 'critical' && a.status !== 'resolved').length, color: '#D92D20' },
+        { label: 'Warning', value: alerts.filter(a => a.severity === 'warning' && a.status !== 'resolved').length, color: '#F79009' }
+    ];
 
     return (
-        <DoctorShell alertCount={alertCount}>
-            <div className="clinical-page-container">
-                <div style={{ maxWidth: '900px', margin: '0 auto' }}>
-
-                    {/* Header */}
-                    <div className="responsive-title-group">
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                            <div style={{ width: '30px', height: '1px', backgroundColor: '#D92D20' }}></div>
-                            <span style={{ fontSize: '11px', fontWeight: '900', color: '#D92D20', textTransform: 'uppercase', letterSpacing: '1px' }}>Clinical Oversight</span>
+        <DoctorShell alertCount={alerts.filter(a => !a.isRead && a.status !== 'resolved').length}>
+            <div style={{ 
+                width: '100%', 
+                height: '100%', 
+                overflowY: 'auto', 
+                backgroundColor: '#ffffff',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center'
+            }}>
+                <div style={{ 
+                    padding: isMobile ? '16px 14px' : '40px', 
+                    width: '100%',
+                    maxWidth: '1200px', 
+                    boxSizing: 'border-box',
+                    display: 'flex',
+                    flexDirection: 'column'
+                }}>
+                    
+                    <header style={{ marginBottom: isMobile ? '20px' : '32px', width: '100%' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                            <div style={{ width: '12px', height: '2px', backgroundColor: '#0052FF' }}></div>
+                            <span style={{ fontSize: '11px', fontWeight: '900', color: '#0052FF', textTransform: 'uppercase', letterSpacing: '0.8px' }}>Clinical Monitoring Center</span>
                         </div>
-                        <h1 style={{ fontWeight: '900', color: '#101828', letterSpacing: '-1.5px' }}>Diagnostic Alerts</h1>
-                        <p style={{ fontSize: '16px', color: '#475467', fontWeight: '600', margin: 0 }}>
-                            {criticalCount > 0 ? <span style={{ color: '#D92D20' }}>{criticalCount} high-risk events detected </span> : 'System status optimal'}
-                        </p>
-                    </div>
+                        <h1 style={{ fontSize: isMobile ? '24px' : '36px', fontWeight: '1000', color: '#101828', margin: 0, letterSpacing: '-1.5px' }}>Diagnostic Board</h1>
+                    </header>
 
-                    {/* Elite Tab System */}
-                    <div className="tab-system-responsive">
-                        {SEVERITY_TABS.map(tab => (
-                            <button key={tab} onClick={() => setActiveTab(tab)} style={{
-                                flex: 1, padding: '12px 16px', borderRadius: '16px', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
-                                fontSize: '13px', fontWeight: '800', transition: 'all 0.2s', whiteSpace: 'nowrap',
-                                backgroundColor: activeTab === tab ? '#ffffff' : 'transparent',
-                                color: activeTab === tab ? '#101828' : '#475467',
-                                boxShadow: activeTab === tab ? '0 4px 12px rgba(16, 24, 40, 0.08)' : 'none'
-                            }}>
+                {/* Metric Filter Cards - Guaranteed Identical Dimensions */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '24px', width: '100%' }}>
+                    {stats.map((s, i) => {
+                        const active = activeTab === s.label;
+                        return (
+                            <div 
+                                key={i} 
+                                onClick={() => setActiveTab(s.label)}
+                                style={{ 
+                                    background: active ? '#0052FF' : 'white', 
+                                    padding: isMobile ? '16px 12px' : '24px 20px', 
+                                    borderRadius: '16px', 
+                                    border: active ? '2.5px solid #0052FF' : '1.5px solid #EAECF0',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s ease-in-out',
+                                    boxShadow: active ? '0 8px 20px rgba(0, 82, 255, 0.2)' : 'none',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    justifyContent: 'center',
+                                    minHeight: isMobile ? '80px' : '100px'
+                                }}
+                            >
+                                <div style={{ fontSize: isMobile ? '22px' : '32px', fontWeight: '950', color: active ? 'white' : s.color, lineHeight: 1 }}>{s.value}</div>
+                                <div style={{ fontSize: '10px', fontWeight: '900', color: active ? 'rgba(255,255,255,0.8)' : '#667085', textTransform: 'uppercase', marginTop: '6px', letterSpacing: '0.5px' }}>{s.label}</div>
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {/* Filter Tabs */}
+                <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '24px', scrollbarWidth: 'none' }}>
+                    {['All', 'Critical', 'Warning', 'Resolved'].map(tab => {
+                        const active = activeTab === tab;
+                        return (
+                            <button 
+                                key={tab} 
+                                onClick={() => setActiveTab(tab)} 
+                                style={{ 
+                                    padding: '10px 20px', borderRadius: '12px', 
+                                    border: active ? '2px solid #0052FF' : '1.5px solid #EAECF0',
+                                    background: active ? '#0052FF' : 'white', 
+                                    color: active ? 'white' : '#475467',
+                                    fontSize: '13px', fontWeight: '800', cursor: 'pointer', whiteSpace: 'nowrap', transition: 'all 0.1s'
+                                }}
+                            >
                                 {tab}
                             </button>
-                        ))}
-                    </div>
+                        );
+                    })}
+                </div>
 
-                    {/* Stats Pods */}
-                    <div className="stats-grid-3">
-                        {[
-                            { label: 'Active Alerts', value: alerts.filter(a => a.status !== 'resolved').length, color: '#0052FF', bg: '#EFF4FF' },
-                            { label: 'Critical Events', value: criticalCount, color: '#D92D20', bg: '#FFF1F0' },
-                            { label: 'Resolved Cases', value: alerts.filter(a => a.status === 'resolved').length, color: '#079455', bg: '#ECFDF5' },
-                        ].map((s, i) => (
-                            <div key={i} style={{ backgroundColor: '#ffffff', borderRadius: '24px', padding: '24px 28px', border: '1px solid #EAECF0', boxShadow: '0 4px 12px rgba(0,0,0,0.02)' }}>
-                                <div style={{ fontSize: '36px', fontWeight: '900', color: s.color, letterSpacing: '-1px', lineHeight: 1 }}>{s.value}</div>
-                                <div style={{ fontSize: '13px', fontWeight: '800', color: '#475467', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: '12px' }}>{s.label}</div>
+                {/* Alert Cards - Fixed Max Width & Standardized Transitions */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingBottom: '40px', width: '100%', maxWidth: '100%' }}>
+                    {loading ? <div style={{ textAlign: 'center', padding: '40px', color: '#98A2B3', fontSize: '13px', fontWeight: '800' }}>Synchronizing Clinical Streams...</div> : 
+                     filtered.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: '80px 20px', background: 'white', borderRadius: '24px', border: '1.5px dashed #EAECF0', width: '100%', boxSizing: 'border-box' }}>
+                            <div style={{ width: '56px', height: '56px', background: '#F2F4F7', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                                <Bell size={24} color="#98A2B3" />
                             </div>
-                        ))}
-                    </div>
-
-                    {/* Error */}
-                    {error && (
-                        <div style={{ backgroundColor: '#FEF3F2', borderRadius: '16px', padding: '16px 24px', color: '#B42318', fontWeight: '700', marginBottom: '24px', border: '1px solid #FEE4E2' }}>
-                            ⚠ Diagnostic Error: {error}
+                            <div style={{ fontSize: '16px', fontWeight: '900', color: '#101828' }}>Board Clear</div>
+                            <p style={{ fontSize: '12px', color: '#667085', marginTop: '4px', fontWeight: '700' }}>No active triage required for this sector.</p>
                         </div>
-                    )}
-
-                    {/* Diagnostic Slot List */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                        {loading && [1, 2, 3, 4].map(i => <Skeleton key={i} height="100px" borderRadius="16px" />)}
-
-                        {!loading && filtered.length === 0 && (
-                            <div style={{ textAlign: 'center', padding: '80px 40px', backgroundColor: '#ffffff', borderRadius: '32px', border: '1px dashed #EAECF0' }}>
-                                <CheckCircle size={56} color="#079455" strokeWidth={1.5} style={{ display: 'block', margin: '0 auto 24px', opacity: 0.8 }} />
-                                <div style={{ fontSize: '20px', fontWeight: '900', color: '#101828', marginBottom: '8px' }}>Operational Integrity Verified</div>
-                                <div style={{ fontSize: '15px', fontWeight: '600', color: '#475467' }}>No {activeTab !== 'All' ? activeTab.toLowerCase() : ''} diagnostic alerts requiring clinical intervention.</div>
-                            </div>
-                        )}
-
-                        {!loading && filtered.map(alert => (
-                            <AlertCard key={alert.id} alert={alert} onResolve={handleResolve} onViewPatient={(pid) => navigate(`/doctor/dashboard?patient=${pid}`)} />
-                        ))}
-                    </div>
+                     ) :
+                     filtered.map(alert => (
+                        <AlertCard key={alert.id} alert={alert} onResolve={handleResolve} isMobile={isMobile} navigate={navigate} />
+                    ))}
                 </div>
             </div>
-            <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }`}</style>
-        </DoctorShell>
+        </div>
+    </DoctorShell>
     );
 }
 
-function AlertCard({ alert, onResolve, onViewPatient }) {
-    const isResolved = alert.status === 'resolved';
+function AlertCard({ alert, onResolve, isMobile, navigate }) {
     const isCritical = alert.severity === 'critical';
     const isWarning = alert.severity === 'warning';
-
-    const severityColor = isCritical ? '#D92D20' : isWarning ? '#DC6803' : '#079455';
-    const severityBg = isCritical ? '#FEF3F2' : isWarning ? '#FFFAEB' : '#ECFDF5';
-    const severityLabel = isCritical ? 'CRITICAL RISK' : isWarning ? 'WARNING' : 'STABLE';
-
-    const timeAgo = (ts) => {
-        if (!ts) return 'Unknown';
-        // Handle Firestore Timestamp
-        const date = ts.toDate ? ts.toDate() : new Date(ts);
-        const diff = Date.now() - date.getTime();
-        const m = Math.floor(diff / 60000);
-        if (m < 0) return 'Just now';
-        if (m < 60) return `${m}m ago`;
-        const h = Math.floor(m / 60);
-        if (h < 24) return `${h}h ago`;
-        return `${Math.floor(h / 24)}d ago`;
-    };
+    
+    const statusColor = isCritical ? '#D92D20' : isWarning ? '#F79009' : '#079455';
+    const statusBg = isCritical ? '#FEF3F2' : isWarning ? '#FFFAEB' : '#ECFDF5';
 
     return (
-        <div className="alert-card-responsive" style={{
-            backgroundColor: '#ffffff', borderRadius: '24px', padding: '24px 32px',
-            boxShadow: isCritical && !isResolved ? '0 12px 32px -8px rgba(217, 45, 32, 0.15)' : '0 4px 12px rgba(16, 24, 40, 0.02)',
-            border: isCritical && !isResolved ? '1px solid #FEE4E2' : '1px solid #EAECF0',
-            opacity: isResolved ? 0.6 : 1,
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        <div style={{ 
+            background: 'white', borderRadius: '24px', padding: isMobile ? '20px' : '28px', 
+            border: '1.5px solid #EAECF0',
+            position: 'relative',
+            width: '100%',
+            boxSizing: 'border-box',
+            transition: 'transform 0.2s ease',
+            cursor: 'default'
         }}>
-            <div style={{ display: 'flex', gap: '24px', flex: 1, alignItems: 'center' }}>
-                {/* Status Indicator */}
-                <div style={{ width: '56px', height: '56px', borderRadius: '18px', backgroundColor: severityBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: `1px solid ${severityColor}20` }}>
-                    {isCritical ? <AlertTriangle size={28} color={severityColor} /> : isWarning ? <Bell size={28} color={severityColor} /> : <CheckCircle size={28} color={severityColor} />}
+            <div style={{ position: 'absolute', left: 0, top: 24, bottom: 24, width: '4px', borderRadius: '0 4px 4px 0', backgroundColor: statusColor }} />
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                    <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: statusBg, color: statusColor, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Bell size={22} strokeWidth={2.5}/>
+                    </div>
+                    <div>
+                        <div style={{ fontSize: isMobile ? '16px' : '20px', fontWeight: '950', color: '#101828', letterSpacing: '-0.5px' }}>{alert.patientName || 'Anonymous Case'}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: '#667085', fontWeight: '800', marginTop: '4px' }}>
+                            <Clock size={13}/> {(() => {
+                                const d = alert.createdAt?.toMillis ? alert.createdAt.toDate() : (alert.createdAt ? new Date(alert.createdAt) : null);
+                                return d ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recently';
+                            })()}
+                        </div>
+                    </div>
                 </div>
-                
-                <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="responsive-flex-between" style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '4px' }}>
-                        <span className="patient-name" style={{ fontSize: '18px', fontWeight: '900', color: '#101828', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{alert.patientName || 'Clinical Case'}</span>
-                        <span className="badge-mobile" style={{ flexShrink: 0, fontSize: '10px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '1px', color: severityColor, backgroundColor: severityBg, padding: '4px 10px', borderRadius: '8px', border: `1px solid ${severityColor}20` }}>
-                            {isResolved ? 'RESOLVED ARCHIVE' : severityLabel}
-                        </span>
-                    </div>
-                    <p className="alert-description" style={{ fontSize: '15px', color: '#475467', fontWeight: '600', margin: '0 0 10px 0', lineHeight: 1.6 }}>{alert.message}</p>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '12px 20px' }}>
-                        <span className="meta-text" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#667085', fontWeight: '700' }}>
-                            <Clock size={14} color="#98A2B3" /> {timeAgo(alert.timestamp)}
-                        </span>
-                        {alert.source && (
-                            <span className="meta-text" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#667085', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                                <User size={14} color="#98A2B3" /> SOURCE: {alert.source}
-                            </span>
-                        )}
-                    </div>
+                <div style={{ 
+                    fontSize: '11px', fontWeight: '950', padding: '6px 14px', borderRadius: '10px', 
+                    background: statusBg, color: statusColor, textTransform: 'uppercase', letterSpacing: '0.8px' 
+                }}>
+                    {alert.severity}
                 </div>
             </div>
 
-            {/* Actions */}
-            {!isResolved && (
-                <div style={{ display: 'flex', gap: '12px', paddingLeft: '32px' }}>
-                    {alert.patientId && (
-                        <button onClick={() => onViewPatient(alert.patientId)} style={{ height: '44px', padding: '0 20px', borderRadius: '14px', border: '1px solid #EAECF0', backgroundColor: '#ffffff', color: '#0052FF', fontSize: '13px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 1px 2px rgba(16, 24, 40, 0.05)' }}>
-                            <ExternalLink size={16} /> Patient Profile
-                        </button>
-                    )}
-                    <button onClick={() => onResolve(alert.id)} style={{ height: '44px', padding: '0 20px', borderRadius: '14px', border: 'none', backgroundColor: '#079455', color: '#ffffff', fontSize: '13px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 4px 12px rgba(7, 148, 85, 0.2)' }}>
-                        <CheckCircle size={16} /> Resolve
+            <p style={{ fontSize: isMobile ? '14px' : '16px', color: '#344054', lineHeight: 1.6, margin: '0 0 28px 0', fontWeight: '600' }}>{alert.message}</p>
+
+            {/* Standardized Button Widths & Alignment */}
+            <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
+                <button 
+                    onClick={() => navigate(`/doctor/dashboard`)} 
+                    style={{ 
+                        flex: 1, height: '52px', background: 'white', border: '1.5px solid #EAECF0', 
+                        borderRadius: '16px', fontSize: '13px', fontWeight: '900', cursor: 'pointer',
+                        transition: 'all 0.1s', color: '#344054'
+                    }}
+                >
+                    Review Case
+                </button>
+                {alert.status !== 'resolved' && (
+                    <button 
+                        onClick={() => onResolve(alert.id)} 
+                        style={{ 
+                            flex: 1, height: '52px', background: '#0052FF', color: 'white', border: 'none', 
+                            borderRadius: '16px', fontSize: '13px', fontWeight: '950', cursor: 'pointer',
+                            boxShadow: '0 8px 16px rgba(0, 82, 255, 0.2)', transition: 'all 0.1s'
+                        }}
+                    >
+                        Resolve Case
                     </button>
-                </div>
-            )}
+                )}
+                {/* Ensure spacing remains consistent even if Resolve button is absent */}
+                {alert.status === 'resolved' && <div style={{ flex: 1 }} />}
+            </div>
         </div>
     );
 }

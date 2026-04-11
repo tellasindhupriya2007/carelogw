@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthContext } from '../../context/AuthContext';
-import { collection, query, where, getDocs, limit, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, limit, addDoc, serverTimestamp, onSnapshot, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import ScreenHeader from '../../components/common/ScreenHeader';
 import FamilyBottomNav from '../common/FamilyBottomNav';
@@ -14,6 +14,7 @@ export default function FamilyPrescriptions() {
     const navigate = useNavigate();
     const { patientId } = useAuthContext();
     const [medicines, setMedicines] = useState([]);
+    const [updatedAt, setUpdatedAt] = useState(null);
     const [history, setHistory] = useState([]);
     const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
@@ -25,32 +26,31 @@ export default function FamilyPrescriptions() {
     };
 
     useEffect(() => {
-        const fetchMeds = async () => {
-            if (!patientId) return;
-            try {
-                const q = query(collection(db, 'prescriptions'), where('patientId', '==', patientId), limit(20));
-                const snap = await getDocs(q);
-                if (!snap.empty) {
-                    const allData = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-                        .sort((a, b) => {
-                            const ta = a.uploadedAt?.toMillis ? a.uploadedAt.toMillis() : new Date(a.uploadedAt || 0).getTime();
-                            const tb = b.uploadedAt?.toMillis ? b.uploadedAt.toMillis() : new Date(b.uploadedAt || 0).getTime();
-                            return tb - ta;
-                        });
-                    setHistory(allData);
-                    setMedicines(allData[0]?.medicines || []);
-                } else {
-                    const planSnap = await getDocs(query(collection(db, 'carePlans'), where('__name__', '==', patientId)));
-                    if (!planSnap.empty) {
-                        setMedicines(planSnap.docs[0].data().medicines || []);
-                    }
-                }
-            } catch (err) {
-                console.error("[Prescr] Load error:", err);
+        if (!patientId) return;
+        
+        // 1. Listen to active medications in real-time
+        const unsubPatient = onSnapshot(doc(db, 'patients', patientId), (s) => {
+            if (s.exists()) {
+                const data = s.data();
+                setMedicines(data.medications || []);
+                setUpdatedAt(data.medicationsUpdatedAt);
             }
             setLoading(false);
+        });
+
+        // 2. Fetch photo archive
+        const fetchHistory = async () => {
+             const q = query(collection(db, 'prescriptions'), where('patientId', '==', patientId), limit(10));
+             const snap = await getDocs(q);
+             setHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => {
+                 const ta = a.uploadedAt?.toMillis ? a.uploadedAt.toMillis() : new Date(a.uploadedAt || 0).getTime();
+                 const tb = b.uploadedAt?.toMillis ? b.uploadedAt.toMillis() : new Date(b.uploadedAt || 0).getTime();
+                 return tb - ta;
+             }));
         };
-        fetchMeds();
+        fetchHistory();
+
+        return () => unsubPatient();
     }, [patientId]);
 
     const compressAndUpload = async (file) => {
@@ -86,11 +86,17 @@ export default function FamilyPrescriptions() {
             // Compress locally - works without Firebase Storage!
             const base64Image = await compressAndUpload(file);
 
+            // Fetch patient info to get the doctorId for synchronization
+            const patientSnap = await getDoc(doc(db, 'patients', patientId));
+            const pData = patientSnap.exists() ? patientSnap.data() : {};
+
             await addDoc(collection(db, 'prescriptions'), {
                 patientId,
-                photoUrl: base64Image, // Save compressed image directly
+                doctorId: pData.doctorId || null, // VITAL: LINK TO DOCTOR
+                photoUrl: base64Image, 
                 uploadedAt: serverTimestamp(),
                 uploadedBy: 'Family',
+                patientName: pData.name || 'Unknown Patient',
                 medicines: medicines
             });
 
@@ -149,11 +155,15 @@ export default function FamilyPrescriptions() {
                 ) : (
                     <>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                            <h3 className="section-title">Current Medications</h3>
-                            {(medicines.length === 0 ? [
-                                { name: "Amoxicillin", dosage: "500mg", frequency: "3 times daily", times: ["08:00"] }, 
-                                { name: "Paracetamol", dosage: "1g", frequency: "As needed", times: ["12:00"] }
-                            ] : medicines).map((m, i) => (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '4px' }}>
+                                <h3 className="section-title" style={{ margin: 0 }}>Current Medications</h3>
+                                {updatedAt && (
+                                    <span style={{ fontSize: '10px', color: '#667085', fontWeight: '800' }}>
+                                        Authorized: {new Date(updatedAt).toLocaleDateString()}
+                                    </span>
+                                )}
+                            </div>
+                            {medicines.length > 0 ? medicines.map((m, i) => (
                                 <div key={i} className="medicine-pill-card">
                                     <div className="pill-icon-box">
                                         <Pill size={22} color={colors.primaryBlue} />
@@ -161,10 +171,14 @@ export default function FamilyPrescriptions() {
                                     <div className="med-info">
                                         <span className="med-name">{m.name}</span>
                                         <span className="med-meta">{m.dosage} • {m.frequency}</span>
-                                        <span className="med-timing">Next dose: {m.scheduledTimes?.[0] || m.times?.[0]}</span>
+                                        <span className="med-timing">Next dose: {m.scheduledTimes?.[0] || m.times?.[0] || '--:--'}</span>
                                     </div>
                                 </div>
-                            ))}
+                            )) : (
+                                <div style={{ padding: '32px', textAlign: 'center', background: 'white', borderRadius: '16px', border: '1px dashed #EAECF0', color: '#667085', fontSize: '13px' }}>
+                                    No active authorized medications found.
+                                </div>
+                            )}
                         </div>
 
                         {history.length > 0 && (

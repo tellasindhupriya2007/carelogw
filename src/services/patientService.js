@@ -42,7 +42,23 @@ export const createPatient = async ({
 }) => {
     if (!name?.trim()) throw new Error('Patient name is required.');
 
-    const humanId = generatePatientId(); // CL-YYYY-XXXX
+    // ─── UNIQUE ID GENERATION LOOP ────────────────────────────
+    let humanId = '';
+    let isUnique = false;
+    let attempts = 0;
+    
+    while (!isUnique && attempts < 5) {
+        humanId = generatePatientId().toUpperCase();
+        const q = query(collection(db, PATIENTS), where('patientId', '==', humanId));
+        const snap = await getDocs(q);
+        if (snap.empty) {
+            isUnique = true;
+        } else {
+            console.warn(`ID Collision detected for ${humanId}, retrying...`);
+            attempts++;
+        }
+    }
+    // ──────────────────────────────────────────────────────────
 
     const ref = await addDoc(collection(db, PATIENTS), {
         // Human ID for display and linking

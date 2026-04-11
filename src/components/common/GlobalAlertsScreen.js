@@ -20,11 +20,9 @@ export default function GlobalAlertsScreen() {
     const [filter, setFilter] = useState('All'); // All, Critical, Normal
 
     useEffect(() => {
-        const idToUse = patientId || 'mock_patient_id';
+        if (!patientId) return;
         
-        preloadMockAlertsIfNeeded(idToUse);
-
-        const unsub = listenToAlerts(patientId, (fetchedAlerts) => {
+        const unsub = listenToAlerts({ patientId }, (fetchedAlerts) => {
             setAlerts(fetchedAlerts);
         });
 
@@ -88,16 +86,8 @@ export default function GlobalAlertsScreen() {
 
                                 let timeStr = 'Just now';
                                 let dateStr = '';
-                                if (alert.timestamp) {
-                                    let date;
-                                    if (alert.timestamp.toDate) {
-                                        date = alert.timestamp.toDate();
-                                    } else if (alert.timestamp.seconds) {
-                                        date = new Date(alert.timestamp.seconds * 1000);
-                                    } else {
-                                        date = new Date(alert.timestamp);
-                                    }
-                                    
+                                if (alert.createdAt) {
+                                    const date = alert.createdAt?.toMillis ? alert.createdAt.toDate() : new Date(alert.createdAt);
                                     if (!isNaN(date.getTime())) {
                                         timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                                         dateStr = date.toLocaleDateString();

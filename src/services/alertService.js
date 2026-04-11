@@ -19,7 +19,7 @@ export const triggerAlert = async (patientId, type, message, source) => {
             source, // "vitals" | "task" | "observation"
             isRead: false,
             status: 'active',
-            timestamp: serverTimestamp()
+            createdAt: serverTimestamp()
         });
         console.log(`Alert triggered: ${message}`);
     } catch (e) {
@@ -52,15 +52,16 @@ export const listenToAlerts = ({ patientId = null, doctorId = null }, callback) 
     } else if (doctorId) {
         q = query(collection(db, 'alerts'), where('doctorId', '==', doctorId));
     } else {
-        q = query(collection(db, 'alerts'));
+        // SECURITY FAILSAFE: Never fetch all alerts. Return empty if no filter.
+        q = query(collection(db, 'alerts'), where('patientId', '==', 'NONE_UNAUTHORIZED'));
     }
     
     return onSnapshot(q, (snapshot) => {
         const alerts = snapshot.docs
             .map(doc => ({ id: doc.id, ...doc.data() }))
             .sort((a, b) => {
-                const ta = a.timestamp?.toDate?.() || new Date(a.timestamp || 0);
-                const tb = b.timestamp?.toDate?.() || new Date(b.timestamp || 0);
+                const ta = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
+                const tb = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
                 return tb - ta; // desc
             });
         callback(alerts);

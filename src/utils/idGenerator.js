@@ -5,6 +5,10 @@
  */
 export const generatePatientId = () => {
     const year = new Date().getFullYear();
-    const randomDigits = Math.floor(1000 + Math.random() * 9000);
-    return `CL-${year}-${randomDigits}`;
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Excluded similar I/1, O/0
+    let suffix = '';
+    for (let i = 0; i < 6; i++) {
+        suffix += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return `CL-${year}-${suffix}`;
 };

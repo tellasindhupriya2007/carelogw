@@ -5,8 +5,7 @@ import DoctorShell from './DoctorShell';
 import ChatInterface from '../common/ChatInterface';
 import { useAuthContext } from '../../context/AuthContext';
 import { subscribeToDoctorPatients } from '../../services/patientService';
-import { User, Search, MessageSquare } from 'lucide-react';
-import { DS } from './ds';
+import { Search, MessageSquare, ChevronRight } from 'lucide-react';
 
 export default function DoctorMessages() {
     const { user, role } = useAuthContext();
@@ -15,140 +14,91 @@ export default function DoctorMessages() {
     const [activePatient, setActivePatient] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [alertCount, setAlertCount] = useState(0);
+    const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
-    // Alert count subscription for DoctorShell
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth <= 768);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
     useEffect(() => {
         if (!user?.uid) return;
         const q = query(collection(db, 'alerts'), where('isRead', '==', false), where('doctorId', '==', user.uid));
-        return onSnapshot(q, s => setAlertCount(s.size));
+        onSnapshot(q, s => setAlertCount(s.size));
     }, [user?.uid]);
 
-    // Fetch My Patients
     useEffect(() => {
         if (!user?.uid) return;
         return subscribeToDoctorPatients(user.uid, (pts) => {
             const filtered = pts.filter(p => !!p.patientId);
             setPatients(filtered);
             setLoading(false);
-            if (filtered.length > 0 && !activePatient) {
-                // Optionally auto-select first patient
-                // setActivePatient(filtered[0]);
-            }
         });
     }, [user?.uid]);
 
     const filteredPatients = patients.filter(p => 
-        p.name?.toLowerCase().includes(searchQuery.toLowerCase())
+        (p.name || '').toLowerCase().includes(searchQuery.toLowerCase())
     );
-
-    const [isMobile, setIsMobile] = useState(window.innerWidth <= 1100);
-    useEffect(() => {
-        const handleResize = () => setIsMobile(window.innerWidth <= 1100);
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, []);
 
     const showSidebar = !isMobile || (isMobile && !activePatient);
     const showChat = !isMobile || (isMobile && !!activePatient);
 
     return (
         <DoctorShell alertCount={alertCount}>
-            <div className="chat-layout-container">
+            <div style={{ display: 'flex', height: '100%', overflow: 'hidden', backgroundColor: 'white' }}>
                 
-                {/* Patient Selector Sidebar */}
+                {/* PATIENT SELECTOR (Full screen list on Mobile) */}
                 {showSidebar && (
-                    <div className="chat-sidebar">
-                    <div style={{ padding: '24px 20px 16px' }}>
-                        <h2 style={{ fontSize: '18px', fontWeight: '900', color: DS.textPrimary, margin: '0 0 16px 0' }}>Messages</h2>
-                        <div style={{ position: 'relative' }}>
-                            <Search size={14} color={DS.textMuted} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
-                            <input 
-                                placeholder="Search patients..."
-                                value={searchQuery}
-                                onChange={e => setSearchQuery(e.target.value)}
-                                style={{
-                                    width: '100%', padding: '10px 12px 10px 36px', borderRadius: '12px',
-                                    border: 'none', backgroundColor: DS.surfaceHighest, fontSize: '13px',
-                                    outline: 'none', fontFamily: 'inherit'
-                                }}
-                            />
+                    <div style={{ 
+                        width: isMobile ? '100%' : '320px', 
+                        minWidth: isMobile ? '100%' : '320px',
+                        borderRight: isMobile ? 'none' : '1px solid #EAECF0',
+                        display: 'flex', flexDirection: 'column'
+                    }}>
+                        <div style={{ padding: isMobile ? '20px 16px' : '24px 20px', borderBottom: '1px solid #EAECF0' }}>
+                            <h1 style={{ fontSize: '24px', fontWeight: '900', color: '#101828', margin: '0 0 16px 0', letterSpacing: '-0.7px' }}>Messages</h1>
+                            <div style={{ position: 'relative' }}>
+                                <Search size={16} color="#98A2B3" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                                <input placeholder="Search clinical contacts..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} style={{ width: '100%', padding: '12px 12px 12px 40px', borderRadius: '12px', border: '1px solid #EAECF0', backgroundColor: '#F9FAFB', fontSize: '15px' }} />
+                            </div>
+                        </div>
+
+                        <div style={{ flex: 1, overflowY: 'auto', padding: '12px' }}>
+                            {loading ? <div style={{ textAlign: 'center', padding: '40px', color: '#98A2B3' }}>Toggling communication nodes...</div> : 
+                             filteredPatients.length === 0 ? <div style={{ textAlign: 'center', padding: '60px 20px', color: '#667085' }}>No active patients found.</div> :
+                             filteredPatients.map(pt => (
+                                <div key={pt.id} onClick={() => setActivePatient(pt)} style={{ padding: '16px', borderRadius: '16px', marginBottom: '8px', cursor: 'pointer', backgroundColor: activePatient?.id === pt.id ? '#F8FAFF' : 'white', border: activePatient?.id === pt.id ? '2px solid #0052FF' : '1px solid #F2F4F7', display: 'flex', alignItems: 'center', gap: '16px', transition: 'all 0.2s' }}>
+                                    <div style={{ width: '44px', height: '44px', borderRadius: '12px', backgroundColor: '#0052FF', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', fontWeight: '900' }}>{pt.name?.charAt(0)}</div>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ fontSize: '16px', fontWeight: '900', color: '#101828', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pt.name}</div>
+                                        <div style={{ fontSize: '12px', color: '#667085', fontWeight: '700' }}>Active Registry · {pt.patientId}</div>
+                                    </div>
+                                    <ChevronRight size={18} color="#98A2B3" />
+                                </div>
+                            ))}
                         </div>
                     </div>
-
-                    <div style={{ flex: 1, overflowY: 'auto', padding: '0 12px 20px' }}>
-                        {loading ? (
-                            <div style={{ textAlign: 'center', padding: '40px', color: DS.textMuted, fontSize: '13px' }}>Loading...</div>
-                        ) : filteredPatients.length === 0 ? (
-                            <div style={{ textAlign: 'center', padding: '40px 20px', color: DS.textMuted }}>
-                                <MessageSquare size={32} style={{ marginBottom: '12px', opacity: 0.5 }} />
-                                <div style={{ fontSize: '14px', fontWeight: '700' }}>No patients found</div>
-                            </div>
-                        ) : (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                {filteredPatients.map(pt => (
-                                    <div 
-                                        key={pt.id} 
-                                        onClick={() => setActivePatient(pt)}
-                                        style={{
-                                            padding: '12px 16px', borderRadius: '14px', cursor: 'pointer',
-                                            backgroundColor: activePatient?.id === pt.id ? 'white' : 'transparent',
-                                            boxShadow: activePatient?.id === pt.id ? '0 4px 12px rgba(0,0,0,0.05)' : 'none',
-                                            transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '12px'
-                                        }}
-                                    >
-                                        <div style={{ 
-                                            width: '40px', height: '40px', borderRadius: '12px', 
-                                            backgroundColor: DS.primaryContainer, color: 'white',
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            fontSize: '14px', fontWeight: '900'
-                                        }}>
-                                            {pt.name.charAt(0)}
-                                        </div>
-                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                            <div style={{ fontSize: '14px', fontWeight: '800', color: DS.textPrimary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                {pt.name}
-                                            </div>
-                                            <div style={{ fontSize: '11px', color: DS.textMuted, fontWeight: '600' }}>
-                                                ID: {pt.patientId}
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                </div>
                 )}
 
-                {/* Chat Interface */}
+                {/* CHAT INTERFACE (Full screen on Mobile if selected) */}
                 {showChat && (
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
-
-                    {activePatient ? (
-                        <ChatInterface 
-                            key={activePatient.id}
-                            currentUser={user} 
-                            patientId={activePatient.id} 
-                            userRole={role || "doctor"} 
-                            onExitChat={() => setActivePatient(null)}
-                        />
-                    ) : (
-                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: DS.surface }}>
-                            <div style={{ textAlign: 'center', maxWidth: '320px' }}>
-                                <div style={{ 
-                                    width: '64px', height: '64px', borderRadius: '20px', 
-                                    backgroundColor: DS.surfaceLow, display: 'flex', 
-                                    alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' 
-                                }}>
-                                    <MessageSquare size={32} color={DS.textMuted} />
-                                </div>
-                                <h3 style={{ fontSize: '18px', fontWeight: '900', color: DS.textPrimary, margin: '0 0 8px 0' }}>Select a Patient</h3>
-                                <p style={{ fontSize: '14px', color: DS.textMuted, lineHeight: 1.5 }}>
-                                    Choose a patient from the list on the left to view their secure care team chat.
-                                </p>
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '100%' }}>
+                        {activePatient ? (
+                            <ChatInterface 
+                                key={activePatient.id}
+                                currentUser={user} 
+                                patientId={activePatient.id} 
+                                userRole={role || "doctor"} 
+                                onExitChat={() => setActivePatient(null)}
+                            />
+                        ) : (
+                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#F9FAFB', padding: '40px', textAlign: 'center' }}>
+                                <div style={{ width: '64px', height: '64px', borderRadius: '24px', background: 'white', border: '1px solid #EAECF0', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px' }}><MessageSquare size={32} color="#0052FF"/></div>
+                                <h3 style={{ fontSize: '20px', fontWeight: '900', color: '#101828', marginBottom: '8px' }}>Select a Clinical Case</h3>
+                                <p style={{ fontSize: '14px', color: '#667085', maxWidth: '300px', fontWeight: '600' }}>Select a patient from the registry to open a secure channel with their care team.</p>
                             </div>
-                        </div>
-                    )}
+                        )}
                     </div>
                 )}
             </div>

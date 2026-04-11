@@ -19,6 +19,8 @@ export const AuthProvider = ({ children }) => {
     const [photoURL, setPhotoURL] = useState(null);
     const [loading, setLoading] = useState(true);
 
+    const [isDev, setIsDev] = useState(false);
+
     useEffect(() => {
         const startTime = Date.now();
 
@@ -34,6 +36,7 @@ export const AuthProvider = ({ children }) => {
             if (firebaseUser) {
                 setUser(firebaseUser);
                 setPhotoURL(firebaseUser.photoURL || null);
+                setIsDev(false);
                 try {
                     // Fetch profile from Firestore with a short "abandon" timer
                     const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
@@ -56,6 +59,7 @@ export const AuthProvider = ({ children }) => {
                 setRole(null);
                 setPatientId(null);
                 setPhotoURL(null);
+                setIsDev(false);
             }
 
             const timeElapsed = Date.now() - startTime;
@@ -80,6 +84,7 @@ export const AuthProvider = ({ children }) => {
      * @returns {{ isNewUser: boolean, userRole: string, userPatientId: string|null }}
      */
     const signInWithGoogle = async (selectedRole) => {
+        setIsDev(false);
         const result = await signInWithPopup(auth, googleProvider);
         const firebaseUser = result.user;
 
@@ -128,6 +133,7 @@ export const AuthProvider = ({ children }) => {
      * @param {string} devRole - family/caretaker/doctor
      */
     const devLogin = async (devRole) => {
+        setIsDev(true);
         const mockUid = `dev-${devRole}`;
         const mockUser = {
             uid: mockUid,
@@ -138,18 +144,8 @@ export const AuthProvider = ({ children }) => {
 
         setUser(mockUser);
         setRole(devRole);
-        // Try to fetch a real patient from the database for dev testing
-        let mockPatientId = 'DEV-PATIENT-001';
-        try {
-            const q = query(collection(db, 'patients'), limit(1));
-            const snap = await getDocs(q);
-            if (!snap.empty) {
-                mockPatientId = snap.docs[0].id;
-                console.log("[AuthContext] DevLogin using real patient:", mockPatientId);
-            }
-        } catch (err) {
-            console.error("[AuthContext] Failed to load real patient for dev mode", err);
-        }
+        const mockPatientId = 'DEV-PATIENT-001';
+        console.log("[AuthContext] DevLogin using local patient ID:", mockPatientId);
 
         setPatientId(mockPatientId);
         setPhotoURL(mockUser.photoURL);
@@ -167,6 +163,7 @@ export const AuthProvider = ({ children }) => {
         setRole(null);
         setPatientId(null);
         setPhotoURL(null);
+        setIsDev(false);
         // Clear any cached data
         try { sessionStorage.clear(); } catch (e) { }
     };
@@ -272,10 +269,11 @@ export const AuthProvider = ({ children }) => {
 
     return (
         <AuthContext.Provider value={{
-            user, role, patientId, photoURL,
+            user, role, patientId, photoURL, isDev,
             setPatientId, signInWithGoogle, logout, setRoleAndPatient, devLogin
         }}>
             {children}
         </AuthContext.Provider>
     );
+
 };

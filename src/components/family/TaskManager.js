@@ -6,8 +6,10 @@ import {
 import { addTask, deleteRelativeTask, subscribeToTasks, createDefaultWorkflow } from '../../services/taskService';
 import { colors } from '../../styles/colors';
 import { spacing } from '../../styles/spacing';
+import { useAuthContext } from '../../context/AuthContext';
 
 export default function TaskManager({ patientId }) {
+    const { isDev } = useAuthContext();
     const [tasks, setTasks] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showAddModal, setShowAddModal] = useState(false);
@@ -21,8 +23,8 @@ export default function TaskManager({ patientId }) {
     useEffect(() => {
         if (!patientId) return;
         const unsub = subscribeToTasks(patientId, async (allTasks) => {
-            if (allTasks.length === 0) {
-                // Auto load realistic mock tasks upon finding no tasks
+            if (allTasks.length === 0 && isDev) {
+                // Auto load realistic mock tasks ONLY in dev mode
                 await createDefaultWorkflow(patientId);
             } else {
                 setTasks(allTasks);
@@ -30,7 +32,7 @@ export default function TaskManager({ patientId }) {
             }
         });
         return () => unsub();
-    }, [patientId]);
+    }, [patientId, isDev]);
 
     const handleAddTask = async (e) => {
         e.preventDefault();
@@ -141,7 +143,7 @@ export default function TaskManager({ patientId }) {
                     textAlign: 'left', padding: '16px', backgroundColor: colors.background, borderRadius: '12px', border: `1px solid ${colors.border}`
                 }}>
                     <span style={{ fontSize: '13px', color: colors.textSecondary, fontWeight: '500', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <AlertCircle size={14} /> Loading care instructions...
+                        <AlertCircle size={14} /> {isDev ? "Auto-populating mock tasks..." : "No tasks added to the care plan yet."}
                     </span>
                 </div>
             )}

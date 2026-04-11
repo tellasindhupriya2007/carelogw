@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthContext } from '../../context/AuthContext';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '../../firebase/config';
 import DoctorShell from './DoctorShell';
 import { LogOut, Save, User as UserIcon } from 'lucide-react';
-import { colors } from '../../styles/colors';
 
 const TOGGLE_ITEMS = [
     { key: 'criticalAlerts', label: 'Critical Alerts', desc: 'Real-time threshold breach alerts' },
@@ -16,6 +17,10 @@ export default function DoctorSettings() {
     const navigate = useNavigate();
     const { user, logout } = useAuthContext();
     const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+    
+    // Core State
+    const [hospital, setHospital] = useState('CareLog Health Net');
+    const [license, setLicense] = useState('MCI-2024-EX-V4');
     const [saved, setSaved] = useState(false);
     const [toggles, setToggles] = useState({
         criticalAlerts: true, missedMeds: true, careLogUpdates: true, familyMessages: false
@@ -24,17 +29,35 @@ export default function DoctorSettings() {
     useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth <= 768);
         window.addEventListener('resize', handleResize);
+        
+        if (user) {
+            setHospital(user.hospital || 'CareLog Health Net');
+            setLicense(user.license || 'MCI-2024-EX-V4');
+            if (user.notificationSettings) setToggles(user.notificationSettings);
+        }
+        
         return () => window.removeEventListener('resize', handleResize);
-    }, []);
+    }, [user]);
 
-    const handleSave = () => {
+    const handleSave = async () => {
         setSaved(true);
+        try {
+            const userRef = doc(db, 'users', user.uid);
+            await updateDoc(userRef, {
+                hospital,
+                license,
+                notificationSettings: toggles
+            });
+        } catch (e) { 
+            console.error("Update failed", e);
+            alert("Safe failed: Check connection");
+        }
         setTimeout(() => setSaved(false), 3000);
     };
 
     return (
         <DoctorShell alertCount={0}>
-            <div className="clinical-page-container" style={{ padding: isMobile ? '16px' : '40px', maxWidth: '820px', margin: '0 auto' }}>
+            <div style={{ padding: isMobile ? '16px' : '40px', maxWidth: '820px', margin: '0 auto' }}>
                 <header style={{ marginBottom: '32px' }}>
                     <h1 style={{ fontWeight: '900', color: '#101828', fontSize: isMobile ? '24px' : '32px', letterSpacing: '-1px', margin: 0 }}>Institutional Settings</h1>
                     <p style={{ color: '#667085', fontSize: '14px', marginTop: '4px' }}>Configure your clinical oversight parameters.</p>
@@ -59,15 +82,22 @@ export default function DoctorSettings() {
                         </div>
 
                         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px' }}>
-                            {[
-                                { label: 'Assigned Hospital', value: 'CareLog Health Net' },
-                                { label: 'Registry Licensing', value: 'MCI-2024-EX-V4' }
-                            ].map((item, i) => (
-                                <div key={i} style={{ padding: '14px 18px', backgroundColor: '#F9FAFB', borderRadius: '16px', border: '1px solid #F2F4F7' }}>
-                                    <div style={{ fontSize: '10px', color: '#98A2B3', fontWeight: '900', textTransform: 'uppercase', marginBottom: '4px' }}>{item.label}</div>
-                                    <div style={{ fontSize: '14px', fontWeight: '700', color: '#1D2939' }}>{item.value}</div>
-                                </div>
-                            ))}
+                            <div style={{ padding: '14px 18px', backgroundColor: '#F9FAFB', borderRadius: '16px', border: '1px solid #F2F4F7' }}>
+                                <div style={{ fontSize: '10px', color: '#98A2B3', fontWeight: '900', textTransform: 'uppercase', marginBottom: '4px' }}>Assigned Hospital</div>
+                                <input 
+                                    value={hospital} 
+                                    onChange={e => setHospital(e.target.value)}
+                                    style={{ width: '100%', border: 'none', background: 'none', fontSize: '14px', fontWeight: '700', color: '#1D2939', padding: 0, outline: 'none' }}
+                                />
+                            </div>
+                            <div style={{ padding: '14px 18px', backgroundColor: '#F9FAFB', borderRadius: '16px', border: '1px solid #F2F4F7' }}>
+                                <div style={{ fontSize: '10px', color: '#98A2B3', fontWeight: '900', textTransform: 'uppercase', marginBottom: '4px' }}>Registry Licensing</div>
+                                <input 
+                                    value={license} 
+                                    onChange={e => setLicense(e.target.value)}
+                                    style={{ width: '100%', border: 'none', background: 'none', fontSize: '14px', fontWeight: '700', color: '#1D2939', padding: 0, outline: 'none' }}
+                                />
+                            </div>
                         </div>
                     </section>
 

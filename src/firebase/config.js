@@ -1,7 +1,7 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
+import { initializeFirestore, getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
     apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
@@ -12,18 +12,26 @@ const firebaseConfig = {
     appId: process.env.REACT_APP_FIREBASE_APP_ID
 };
 
-console.log('--- ENV LOADED ---');
-['REACT_APP_FIREBASE_API_KEY'].forEach(key => {
-    if (!process.env[key]) console.error(`[CRITICAL] Missing Required Variable: ${key}`);
-    else console.log(`[OK] ${key} is present`);
-});
-
-
-// Safe initialization guard
+// 1. Initialize Firebase App
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-console.log('--- FIREBASE OK ---');
 
+// 2. Export Auth and Storage immediately
 export const auth = getAuth(app);
-export const db = getFirestore(app);
 export const storage = getStorage(app);
 export const messaging = null;
+
+// 3. Initialize Firestore with Long Polling (Safe Multi-Call Guard)
+let dbInstance;
+if (getApps().length > 0) {
+    try {
+        dbInstance = getFirestore(app);
+    } catch (e) {
+        dbInstance = initializeFirestore(app, { experimentalForceLongPolling: true });
+    }
+} else {
+    dbInstance = initializeFirestore(app, { experimentalForceLongPolling: true });
+}
+
+export const db = dbInstance;
+
+console.log('--- FIREBASE OK ---');

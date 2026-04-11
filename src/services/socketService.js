@@ -36,13 +36,14 @@ export const initSocket = ({ userId, role, name }) => {
     if (socket) { socket.disconnect(); socket = null; }
 
     socket = io(SOCKET_URL, {
-        transports: ['websocket', 'polling'],
+        transports: ['polling', 'websocket'], // Try polling first for better compatibility
         reconnection: true,
-        reconnectionAttempts: Infinity, // Keep trying
+        reconnectionAttempts: Infinity,
         reconnectionDelay: 1000,
         reconnectionDelayMax: 5000,
         timeout: 20000,
         autoConnect: true,
+        withCredentials: true,
     });
 
     socket._userId = userId;
