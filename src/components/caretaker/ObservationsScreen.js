@@ -110,7 +110,8 @@ export default function ObservationsScreen() {
                 try {
                     const blob = await (await fetch(selectedImage)).blob();
                     const file = new File([blob], `obs_${Date.now()}.jpg`, { type: 'image/jpeg' });
-                    uploadedImageUrl = await uploadPatientMedia(patientId, file, 'Observation', user.uid);
+                    const uploadResult = await uploadPatientMedia(patientId, file, 'Observation Image', user.uid);
+                    uploadedImageUrl = uploadResult.url; // Use only the URL string
                 } catch (e) {
                     console.warn("Image upload failed, proceeding with text log:", e);
                     showToast("Photo sync failed - saving log only", "warning");
@@ -120,7 +121,8 @@ export default function ObservationsScreen() {
             if (audioBlob) {
                 try {
                     const file = new File([audioBlob], `voice_${Date.now()}.webm`, { type: 'audio/webm' });
-                    uploadedAudioUrl = await uploadPatientMedia(patientId, file, 'Observation', user.uid);
+                    const uploadResult = await uploadPatientMedia(patientId, file, 'Voice Observation', user.uid);
+                    uploadedAudioUrl = uploadResult.url; // Use only the URL string
                 } catch (e) {
                     console.warn("Audio upload failed, proceeding with text log:", e);
                     showToast("Voice sync failed - saving log only", "warning");
@@ -129,8 +131,8 @@ export default function ObservationsScreen() {
 
             const obs = {
                 mood, 
-                hasVoice: !!audioBlob, 
-                hasImage: !!selectedImage, 
+                hasVoice: !!uploadedAudioUrl, 
+                hasImage: !!uploadedImageUrl, 
                 isCritical,
                 imageUrl: uploadedImageUrl,
                 audioUrl: uploadedAudioUrl,

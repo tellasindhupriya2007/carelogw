@@ -15,7 +15,7 @@ import {
     onSnapshot, serverTimestamp
 } from 'firebase/firestore';
 
-const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4001';
+const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || (window.location.hostname.includes('vercel.app') || window.location.hostname !== 'localhost' ? 'https://carelog-backend.onrender.com' : 'http://localhost:4001');
 
 // ─── Singleton Socket Instance ───────────────────────────
 let socket = null;

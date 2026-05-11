@@ -99,16 +99,18 @@ export default function PatientDetails({ inlinePatientId, onClose }) {
 }
 
 function OverviewTab({ trendData, vitalsHistory, isMobile }) {
-    const latest = vitalsHistory[0] || {};
+    const latestBpEntry = vitalsHistory.find(v => v.bp?.systolic || v.bpSystolic) || {};
+    const latestHrEntry = vitalsHistory.find(v => v.heartRate || v.hr) || {};
+    const latestTempEntry = vitalsHistory.find(v => v.temperature || v.temp) || {};
     
     // Clinical Threshold Safety Engine
-    const isBpAlert = (latest.bp?.systolic > 150 || latest.bp?.systolic < 90 || latest.bpSystolic > 150);
-    const isHrAlert = (latest.heartRate > 100 || latest.heartRate < 60);
+    const isBpAlert = (latestBpEntry.bp?.systolic > 150 || latestBpEntry.bp?.systolic < 90 || latestBpEntry.bpSystolic > 150);
+    const isHrAlert = (latestHrEntry.heartRate > 100 || latestHrEntry.heartRate < 60);
 
     const vitals = [
         { 
             label: 'BP', 
-            value: `${latest.bp?.systolic || latest.bpSystolic || '--'}/${latest.bp?.diastolic || latest.bpDiastolic || '--'}`, 
+            value: (latestBpEntry.bp?.systolic || latestBpEntry.bpSystolic) ? `${latestBpEntry.bp?.systolic || latestBpEntry.bpSystolic}/${latestBpEntry.bp?.diastolic || latestBpEntry.bpDiastolic || '--'}` : '--', 
             unit: 'mmHg', 
             icon: Activity, 
             isAlert: isBpAlert,
@@ -118,7 +120,7 @@ function OverviewTab({ trendData, vitalsHistory, isMobile }) {
         },
         { 
             label: 'HR', 
-            value: latest.heartRate ? `${latest.heartRate} bpm` : '--', 
+            value: (latestHrEntry.heartRate || latestHrEntry.hr) ? `${latestHrEntry.heartRate || latestHrEntry.hr} bpm` : '--', 
             unit: 'bpm', 
             icon: HeartPulse, 
             isAlert: isHrAlert,
@@ -128,13 +130,13 @@ function OverviewTab({ trendData, vitalsHistory, isMobile }) {
         },
         { 
             label: 'Temp', 
-            value: (latest.temperature || latest.temp) ? `${latest.temperature || latest.temp}°F` : '--', 
+            value: (latestTempEntry.temperature || latestTempEntry.temp) ? `${latestTempEntry.temperature || latestTempEntry.temp}°F` : '--', 
             unit: '°F', 
             icon: Thermometer, 
-            isAlert: (latest.temperature >= 100.4 || latest.temp >= 100.4 || latest.temperature <= 95 || latest.temp <= 95),
-            color: (latest.temperature >= 100.4 || latest.temp >= 100.4 || latest.temperature <= 95 || latest.temp <= 95) ? '#D92D20' : '#F79009', 
-            bg: (latest.temperature >= 100.4 || latest.temp >= 100.4 || latest.temperature <= 95 || latest.temp <= 95) ? '#FEF2F2' : '#FFFAEB',
-            border: (latest.temperature >= 100.4 || latest.temp >= 100.4 || latest.temperature <= 95 || latest.temp <= 95) ? '#FDA29B' : '#EAECF0'
+            isAlert: (latestTempEntry.temperature >= 100.4 || latestTempEntry.temp >= 100.4 || latestTempEntry.temperature <= 95 || latestTempEntry.temp <= 95),
+            color: (latestTempEntry.temperature >= 100.4 || latestTempEntry.temp >= 100.4 || latestTempEntry.temperature <= 95 || latestTempEntry.temp <= 95) ? '#D92D20' : '#F79009', 
+            bg: (latestTempEntry.temperature >= 100.4 || latestTempEntry.temp >= 100.4 || latestTempEntry.temperature <= 95 || latestTempEntry.temp <= 95) ? '#FEF2F2' : '#FFFAEB',
+            border: (latestTempEntry.temperature >= 100.4 || latestTempEntry.temp >= 100.4 || latestTempEntry.temperature <= 95 || latestTempEntry.temp <= 95) ? '#FDA29B' : '#EAECF0'
         }
     ];
 
@@ -244,15 +246,19 @@ function MediaTab({ media, careLogs, isMobile }) {
 }
 
 function PrescriptionsTab({ patient, patientId, isMobile }) {
-    const [meds, setMeds] = useState(patient?.medications || []);
+    const [meds, setMeds] = useState(Array.isArray(patient?.medications) ? patient.medications : []);
     const [name, setName] = useState('');
     const [dosage, setDosage] = useState('');
     const [freq, setFreq] = useState('');
     const [time, setTime] = useState('');
 
     const save = async (u) => {
-        await updateDoc(doc(db, 'patients', patientId), { medications: u, medicationsUpdatedAt: new Date().toISOString() });
-        setMeds(u);
+        try {
+            await updateDoc(doc(db, 'patients', patientId), { medications: u, medicationsUpdatedAt: new Date().toISOString() });
+            setMeds(u);
+        } catch (error) {
+            console.error("Error saving prescriptions:", error);
+        }
     };
 
     const handleAdd = () => {
@@ -268,9 +274,9 @@ function PrescriptionsTab({ patient, patientId, isMobile }) {
                 {patient?.medicationsUpdatedAt && <span style={{ fontSize: '9px', color: '#667085', fontWeight: '800' }}>Authorized: {new Date(patient.medicationsUpdatedAt).toLocaleDateString()}</span>}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
-                {meds.map((m, i) => (
+                {Array.isArray(meds) && meds.map((m, i) => (
                     <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', background: '#F9FAFB', borderRadius: '12px' }}>
-                        <div><div style={{ fontSize: '13px', fontWeight: '850' }}>{m.name || m}</div>{m.dosage && <div style={{ fontSize: '10px', color: '#667085' }}>{m.dosage} · {m.frequency}</div>}</div>
+                        <div><div style={{ fontSize: '13px', fontWeight: '850' }}>{typeof m === 'string' ? m : (m?.name || m?.title || 'Unknown Medication')}</div>{m?.dosage && <div style={{ fontSize: '10px', color: '#667085' }}>{m.dosage} · {m.frequency}</div>}</div>
                         <button onClick={() => save(meds.filter((_,j)=>j!==i))} style={{ border: 'none', background: 'none', color: '#EF4444', cursor: 'pointer' }}><Trash2 size={16}/></button>
                     </div>
                 ))}
@@ -308,11 +314,16 @@ function ReportsTab({ patientId, isMobile }) {
     React.useEffect(() => {
         const q = query(
             collection(db, 'weeklyReports'), 
-            where('patientId', '==', patientId),
-            orderBy('updatedAt', 'desc')
+            where('patientId', '==', patientId)
         );
         const unsubscribe = onSnapshot(q, (snap) => {
-            setReports(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+                .sort((a,b) => {
+                    const tA = a.updatedAt?.toMillis ? a.updatedAt.toMillis() : (a.updatedAt ? new Date(a.updatedAt).getTime() : 0);
+                    const tB = b.updatedAt?.toMillis ? b.updatedAt.toMillis() : (b.updatedAt ? new Date(b.updatedAt).getTime() : 0);
+                    return tB - tA;
+                });
+            setReports(data);
             setLoading(false);
         });
         return () => unsubscribe();
